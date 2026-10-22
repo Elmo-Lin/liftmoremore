@@ -1,0 +1,457 @@
+import {
+  ArrowLeft,
+  CalendarDays,
+  ClipboardList,
+  Dumbbell,
+  History,
+  Mail,
+  Pause,
+  Pencil,
+  Phone,
+  Play,
+  Trash2,
+  UserRoundX,
+} from 'lucide-react'
+import { lazy, Suspense, useMemo, useState } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
+import { InviteStudentButton } from '../../components/coach/InviteStudentButton'
+import { SessionPackagesPanel } from '../../components/coach/SessionPackagesPanel'
+import { StudentFormModal } from '../../components/coach/StudentFormModal'
+import { PRTable } from '../../components/progress/PRTable'
+import { Button, ButtonLink } from '../../components/ui/Button'
+import { Segmented, SelectInput, TextArea } from '../../components/ui/Form'
+import { ConfirmDialog } from '../../components/ui/Modal'
+import { Avatar, Badge, BalanceMeter, Card, CardHeader, EmptyState, PageHeader, Tabs } from '../../components/ui/Primitives'
+import { PageLoading } from '../../components/ui/PageLoading'
+import { PlanDayView } from '../../components/workout/PlanDayView'
+import { WorkoutDetailModal, WorkoutRow } from '../../components/workout/WorkoutDetail'
+import { formatDate, formatTime, GENDER_LABEL, GOAL_LABEL, relativeDay } from '../../lib/format'
+import { deductionFor, LOW_BALANCE_THRESHOLD } from '../../lib/sessions'
+import { nextTrainingDay, personalRecords, weeklyBuckets, workoutDate } from '../../lib/stats'
+import { useData, useToast } from '../../store/contexts'
+import { selectBalance, selectCompleted, selectNextAppointment, selectPlan, selectStudent } from '../../store/selectors'
+import type { Student, WorkoutSession } from '../../types'
+
+const ProgressDashboard = lazy(() => import('../../components/progress/ProgressDashboard').then((m) => ({ default: m.ProgressDashboard })))
+
+type TabKey = 'overview' | 'history' | 'plans' | 'packages' | 'progress'
+const TAB_KEYS: TabKey[] = ['overview', 'history', 'plans', 'packages', 'progress']
+
+export function StudentDetailPage() {
+  const { id } = useParams()
+  const { data, actions } = useData()
+  const notify = useToast()
+  const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
+  const [editing, setEditing] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const student = selectStudent(data, id)
+
+  const tabParam = params.get('tab') as TabKey | null
+  const tab: TabKey = tabParam && TAB_KEYS.includes(tabParam) ? tabParam : 'overview'
+
+  if (!student) {
+    return (
+      <Card>
+        <EmptyState
+          icon={UserRoundX}
+          title="找不到此學員"
+          description="此學員可能已被刪除。"
+          action={<ButtonLink to="/coach/students">回到學員列表</ButtonLink>}
+        />
+      </Card>
+    )
+  }
+
+  const balance = selectBalance(data, student.id)
+  const workouts = selectCompleted(data, student.id)
+  const plan = selectPlan(data, student.activePlanId)
+  const day = nextTrainingDay(plan, data.workouts, student.id)
+  const startHref = plan && day ? `/coach/workouts/new?student=${student.id}&plan=${plan.id}&day=${day.id}` : `/coach/workouts/new?student=${student.id}`
+  const pending = workouts.filter((w) => w.type === 'coached' && !deductionFor(w.id, data.transactions)).length
+
+  const toggleStatus = () => {
+    const next = student.status === 'active' ? 'inactive' : 'active'
+    const res = actions.updateStudent(student.id, { status: next })
+    notify(res.ok ? (next === 'active' ? `${student.name} 已恢復為進行中` : `${student.name} 已設為暫停`) : res.error, res.ok ? 'success' : 'error')
+  }
+
+  return (
+    <div>
+      <PageHeader
+        back={
+          <Link to="/coach/students" className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-900">
+            <ArrowLeft className="size-4" />
+            學員
+          </Link>
+        }
+        title={
+          <span className="flex items-center gap-3">
+            <Avatar name={student.name} id={student.id} size="lg" />
+            <span>
+              <span className="flex flex-wrap items-center gap-2">
+                {student.name}
+                {student.status === 'active' ? <Badge tone="accent">進行中</Badge> : <Badge>暫停</Badge>}
+              </span>
+              <span className="mt-1 block text-sm font-normal text-ink-500">
+                {GOAL_LABEL[student.goal]}・每週 {student.weeklyFrequency} 次・剩 {balance.remaining} 堂
+              </span>
+            </span>
+          </span>
+        }
+        actions={
+          <>
+            <Button variant="secondary" icon={Pencil} onClick={() => setEditing(true)}>
+              編輯
+            </Button>
+            <InviteStudentButton student={student} />
+            <Button variant="secondary" icon={student.status === 'active' ? Pause : Play} onClick={toggleStatus}>
+              {student.status === 'active' ? '設為暫停' : '恢復進行中'}
+            </Button>
+            {student.status === 'active' && (
+              <ButtonLink to={startHref} icon={Dumbbell} variant="accent">
+                開始訓練
+              </ButtonLink>
+            )}
+          </>
+        }
+      />
+
+      <Tabs
+        value={tab}
+        onChange={(t) => setParams(t === 'overview' ? {} : { tab: t }, { replace: true })}
+        tabs={[
+          { value: 'overview', label: '總覽' },
+          { value: 'history', label: '訓練紀錄', count: workouts.length },
+          { value: 'plans', label: '訓練課表' },
+          { value: 'packages', label: '課程方案' },
+          { value: 'progress', label: '進步分析' },
+        ]}
+      />
+
+      <div className="mt-5">
+        {tab === 'overview' && <Overview key={student.id} student={student} onTab={(t) => setParams({ tab: t })} pending={pending} />}
+        {tab === 'history' && <HistoryTab key={student.id} workouts={workouts} />}
+        {tab === 'plans' && <PlansTab key={`${student.id}:${student.activePlanId}`} student={student} />}
+        {tab === 'packages' && <SessionPackagesPanel studentId={student.id} />}
+        {tab === 'progress' && (
+          <Suspense fallback={<PageLoading />}>
+            <ProgressDashboard studentId={student.id} audience="coach" />
+          </Suspense>
+        )}
+      </div>
+
+      <div className="mt-10 border-t border-line pt-5">
+        <Button variant="destructive" size="sm" icon={Trash2} onClick={() => setConfirmDelete(true)}>
+          刪除學員
+        </Button>
+      </div>
+
+      <StudentFormModal open={editing} onClose={() => setEditing(false)} student={student} />
+      <ConfirmDialog
+        open={confirmDelete}
+        title={`刪除 ${student.name}？`}
+        description="此學員的訓練紀錄、課程方案與堂數異動都會一併刪除，無法復原。若只是暫時停課，建議改為「暫停」。"
+        confirmLabel="永久刪除"
+        tone="danger"
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          actions.deleteStudent(student.id)
+          notify(`已刪除學員 ${student.name}`)
+          navigate('/coach/students')
+        }}
+      />
+    </div>
+  )
+}
+
+function Overview({ student, onTab, pending }: { student: Student; onTab: (t: TabKey) => void; pending: number }) {
+  const { data, actions } = useData()
+  const notify = useToast()
+  const [notes, setNotes] = useState(student.coachNotes)
+  const [open, setOpen] = useState<WorkoutSession | null>(null)
+  const balance = selectBalance(data, student.id)
+  const workouts = useMemo(() => selectCompleted(data, student.id), [data, student.id])
+  const prs = useMemo(() => personalRecords(workouts).slice(0, 5), [workouts])
+  const next = selectNextAppointment(data, student.id)
+  const plan = selectPlan(data, student.activePlanId)
+  const recentWeeks = weeklyBuckets(workouts, 4)
+  const avgPerWeek = recentWeeks.reduce((s, b) => s + b.coached + b.independent, 0) / 4
+  const age = student.birthYear ? new Date().getFullYear() - student.birthYear : null
+  const current = balance.packages.find((b) => b.remaining > 0) ?? balance.packages.at(-1)
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+      <div className="space-y-4">
+        <Card>
+          <CardHeader title="訓練目標" />
+          <div className="px-5 pb-5">
+            <p className="text-[15px] font-medium text-ink-900">{GOAL_LABEL[student.goal]}</p>
+            <p className="mt-1 text-sm text-ink-600">{student.goalDetail || '尚未填寫目標說明'}</p>
+            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-canvas py-2.5">
+                <p className="text-xs text-ink-500">計畫頻率</p>
+                <p className="mt-0.5 font-semibold text-ink-900">每週 {student.weeklyFrequency} 次</p>
+              </div>
+              <div className="rounded-lg bg-canvas py-2.5">
+                <p className="text-xs text-ink-500">近 4 週實際</p>
+                <p className="mt-0.5 font-semibold text-ink-900">每週 {avgPerWeek.toFixed(1)} 次</p>
+              </div>
+              <div className="rounded-lg bg-canvas py-2.5">
+                <p className="text-xs text-ink-500">累計訓練</p>
+                <p className="mt-0.5 font-semibold text-ink-900">{workouts.length} 次</p>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="教練備註" description="僅教練可見，學員端不會顯示" />
+          <div className="px-5 pb-5">
+            <TextArea label="備註內容" className="min-h-28" value={notes} maxLength={500} onChange={(e) => setNotes(e.target.value)} />
+            <div className="mt-2 flex justify-end">
+              <Button
+                size="sm"
+                disabled={notes === student.coachNotes}
+                onClick={() => {
+                  const res = actions.updateStudent(student.id, { coachNotes: notes })
+                  notify(res.ok ? '備註已儲存' : res.error, res.ok ? 'success' : 'error')
+                }}
+              >
+                儲存備註
+              </Button>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="最近訓練"
+            action={
+              <Button variant="ghost" size="sm" icon={History} onClick={() => onTab('history')}>
+                全部紀錄
+              </Button>
+            }
+          />
+          {workouts.length ? (
+            <div className="divide-y divide-line border-t border-line">
+              {workouts.slice(0, 5).map((w) => (
+                <WorkoutRow key={w.id} workout={w} showDeduction onOpen={() => setOpen(w)} />
+              ))}
+            </div>
+          ) : (
+            <EmptyState compact icon={Dumbbell} title="尚無訓練紀錄" />
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader title="個人紀錄" description="實際完成的最重一組；估算 1RM 僅供參考" />
+          <PRTable prs={prs} />
+        </Card>
+      </div>
+
+      <div className="space-y-4">
+        <Card className="p-5">
+          <div className="flex items-center justify-between">
+            <p className="text-[13px] text-ink-500">剩餘堂數</p>
+            <button type="button" onClick={() => onTab('packages')} className="text-xs font-medium text-accent-700 hover:underline">
+              管理方案
+            </button>
+          </div>
+          <p className={`mt-1 num text-[32px] tracking-tight ${balance.remaining <= LOW_BALANCE_THRESHOLD ? 'text-warn-600' : 'text-ink-900'}`}>
+            {balance.remaining}
+            <span className="ml-1 text-base font-normal text-ink-500">堂</span>
+          </p>
+          {current && (
+            <>
+              <div className="mt-3">
+                <BalanceMeter remaining={current.remaining} total={current.total + Math.max(0, current.adjusted)} />
+              </div>
+              <p className="mt-2 text-xs text-ink-500">
+                {current.pkg.name}・已用 {current.used} / {current.total} 堂
+              </p>
+            </>
+          )}
+          {balance.remaining <= LOW_BALANCE_THRESHOLD && <p className="mt-3 rounded-lg bg-warn-50 px-3 py-2 text-xs text-warn-600">堂數偏低，建議提醒學員續約。</p>}
+          {pending > 0 && (
+            <button type="button" onClick={() => onTab('history')} className="mt-3 block w-full rounded-lg bg-subtle px-3 py-2 text-left text-xs text-ink-600 hover:bg-line">
+              有 {pending} 堂教練課尚未扣堂，點此查看
+            </button>
+          )}
+        </Card>
+
+        <Card className="p-5">
+          <p className="text-[13px] text-ink-500">下次課程（示範排程）</p>
+          {next ? (
+            <p className="mt-1 flex items-center gap-2 text-[15px] font-medium text-ink-900">
+              <CalendarDays className="size-4 text-ink-400" />
+              {formatDate(next.startAt, { weekday: true })} {formatTime(next.startAt)}
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-ink-400">尚無排程</p>
+          )}
+          <p className="mt-4 text-[13px] text-ink-500">目前課表</p>
+          <button type="button" onClick={() => onTab('plans')} className="mt-1 flex items-center gap-2 text-left text-[15px] font-medium text-ink-900 hover:underline">
+            <ClipboardList className="size-4 text-ink-400" />
+            {plan?.name ?? '未指派'}
+          </button>
+        </Card>
+
+        <Card className="p-5">
+          <p className="mb-3 text-[13px] font-medium text-ink-700">基本資料</p>
+          <dl className="space-y-2.5 text-sm">
+            <div className="flex items-center gap-2 text-ink-700">
+              <Mail className="size-4 text-ink-400" />
+              <a href={`mailto:${student.email}`} className="truncate hover:underline">
+                {student.email}
+              </a>
+            </div>
+            {student.phone && (
+              <div className="flex items-center gap-2 text-ink-700">
+                <Phone className="size-4 text-ink-400" />
+                <a href={`tel:${student.phone}`} className="hover:underline">
+                  {student.phone}
+                </a>
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-2 pt-2 text-center">
+              <div>
+                <dt className="text-xs text-ink-500">性別</dt>
+                <dd className="font-medium text-ink-900">{GENDER_LABEL[student.gender]}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-ink-500">年齡</dt>
+                <dd className="font-medium text-ink-900">{age ?? '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-ink-500">身高</dt>
+                <dd className="font-medium text-ink-900">{student.heightCm ? `${student.heightCm} cm` : '—'}</dd>
+              </div>
+            </div>
+            <p className="pt-2 text-xs text-ink-500">
+              加入於 {formatDate(student.joinedAt, { year: true })}
+              {workouts[0] && `・上次訓練 ${relativeDay(workoutDate(workouts[0]))}`}
+            </p>
+          </dl>
+        </Card>
+      </div>
+      <WorkoutDetailModal workout={open} onClose={() => setOpen(null)} audience="coach" />
+    </div>
+  )
+}
+
+function HistoryTab({ workouts }: { workouts: WorkoutSession[] }) {
+  const { data } = useData()
+  const [type, setType] = useState<'all' | 'coached' | 'independent' | 'pending'>('all')
+  const [open, setOpen] = useState<WorkoutSession | null>(null)
+  const list = workouts.filter((w) => {
+    if (type === 'pending') return w.type === 'coached' && !deductionFor(w.id, data.transactions)
+    return type === 'all' || w.type === type
+  })
+  return (
+    <div>
+      <div className="mb-3 overflow-x-auto">
+        <Segmented
+          label="類型篩選"
+          value={type}
+          onChange={setType}
+          options={[
+            { value: 'all', label: '全部' },
+            { value: 'coached', label: '教練課' },
+            { value: 'independent', label: '自主訓練' },
+            { value: 'pending', label: '未扣堂' },
+          ]}
+        />
+      </div>
+      <Card>
+        {list.length ? (
+          <div className="divide-y divide-line">
+            {list.map((w) => (
+              <WorkoutRow key={w.id} workout={w} showDeduction onOpen={() => setOpen(w)} />
+            ))}
+          </div>
+        ) : (
+          <EmptyState compact icon={History} title={type === 'pending' ? '沒有未扣堂的課程' : '沒有符合的紀錄'} />
+        )}
+      </Card>
+      <p className="mt-3 text-xs text-ink-500">自主訓練由學員自行記錄，不會扣除教練課堂數。教練課完成後可在紀錄中個別扣堂或撤銷。</p>
+      <WorkoutDetailModal workout={open} onClose={() => setOpen(null)} audience="coach" />
+    </div>
+  )
+}
+
+function PlansTab({ student }: { student: Student }) {
+  const { data, actions } = useData()
+  const notify = useToast()
+  const plan = selectPlan(data, student.activePlanId)
+  const [choice, setChoice] = useState(student.activePlanId ?? '')
+
+  const assign = () => {
+    if (!choice) {
+      actions.updateStudent(student.id, { activePlanId: undefined })
+      notify('已取消指派課表', 'info')
+      return
+    }
+    const others = data.students.filter((s) => s.activePlanId === choice && s.id !== student.id).map((s) => s.id)
+    const res = actions.assignPlan(choice, [...others, student.id])
+    notify(res.ok ? `已將「${selectPlan(data, choice)?.name}」指派給 ${student.name}` : res.error, res.ok ? 'success' : 'error')
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <SelectInput label="指派課表" containerClassName="flex-1" value={choice} onChange={(e) => setChoice(e.target.value)}>
+            <option value="">不指派</option>
+            {data.plans.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </SelectInput>
+          <Button onClick={assign} disabled={choice === (student.activePlanId ?? '')}>
+            套用
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-ink-500">學員可在自己的頁面檢視課表內容，但無法修改教練撰寫的課表。</p>
+      </Card>
+      {plan ? (
+        <>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-ink-900">{plan.name}</h3>
+              <p className="text-sm text-ink-500">{plan.description}</p>
+            </div>
+            <ButtonLink to={`/coach/plans/${plan.id}`} variant="secondary" size="sm" icon={Pencil}>
+              編輯課表
+            </ButtonLink>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {plan.days.map((d) => (
+              <PlanDayView
+                key={d.id}
+                day={d}
+                action={
+                  student.status === 'active' && (
+                    <ButtonLink to={`/coach/workouts/new?student=${student.id}&plan=${plan.id}&day=${d.id}`} size="sm" variant="secondary" icon={Play}>
+                      開始
+                    </ButtonLink>
+                  )
+                }
+              />
+            ))}
+          </div>
+        </>
+      ) : (
+        <Card>
+          <EmptyState
+            icon={ClipboardList}
+            title="尚未指派課表"
+            description="從上方選擇課表，或先建立新的課表。"
+            action={<ButtonLink to="/coach/plans/new">建立課表</ButtonLink>}
+          />
+        </Card>
+      )}
+    </div>
+  )
+}

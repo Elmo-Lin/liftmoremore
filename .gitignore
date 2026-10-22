@@ -1,0 +1,5 @@
+# Local H2 database files
+/data/
+
+# OS / editor
+.DS_Store

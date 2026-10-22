@@ -1,0 +1,48 @@
+import type { Exercise } from '../types'
+
+export const EXERCISES: Exercise[] = [
+  { id: 'ex_squat', name: '槓鈴背蹲舉', nameEn: 'Barbell Squat', muscleGroup: 'legs', equipment: 'barbell', increment: 2.5 },
+  { id: 'ex_deadlift', name: '傳統硬舉', nameEn: 'Deadlift', muscleGroup: 'back', equipment: 'barbell', increment: 2.5 },
+  { id: 'ex_bench', name: '槓鈴臥推', nameEn: 'Bench Press', muscleGroup: 'chest', equipment: 'barbell', increment: 2.5 },
+  { id: 'ex_ohp', name: '站姿肩推', nameEn: 'Overhead Press', muscleGroup: 'shoulders', equipment: 'barbell', increment: 2.5 },
+  { id: 'ex_latpd', name: '滑輪下拉', nameEn: 'Lat Pulldown', muscleGroup: 'back', equipment: 'cable', increment: 2.5 },
+  { id: 'ex_seatedrow', name: '坐姿划船', nameEn: 'Seated Row', muscleGroup: 'back', equipment: 'machine', increment: 2.5 },
+  { id: 'ex_dbpress', name: '啞鈴臥推', nameEn: 'Dumbbell Press', muscleGroup: 'chest', equipment: 'dumbbell', increment: 2 },
+  { id: 'ex_legpress', name: '腿推舉', nameEn: 'Leg Press', muscleGroup: 'legs', equipment: 'machine', increment: 5 },
+  { id: 'ex_rdl', name: '羅馬尼亞硬舉', nameEn: 'Romanian Deadlift', muscleGroup: 'glutes', equipment: 'barbell', increment: 2.5 },
+  { id: 'ex_cablerow', name: '繩索划船', nameEn: 'Cable Row', muscleGroup: 'back', equipment: 'cable', increment: 2.5 },
+  { id: 'ex_hipthrust', name: '槓鈴臀推', nameEn: 'Hip Thrust', muscleGroup: 'glutes', equipment: 'barbell', increment: 5 },
+  { id: 'ex_goblet', name: '高腳杯深蹲', nameEn: 'Goblet Squat', muscleGroup: 'legs', equipment: 'dumbbell', increment: 2 },
+  { id: 'ex_bss', name: '保加利亞分腿蹲', nameEn: 'Bulgarian Split Squat', muscleGroup: 'legs', equipment: 'dumbbell', increment: 2 },
+  { id: 'ex_dbrow', name: '啞鈴單臂划船', nameEn: 'One-arm Dumbbell Row', muscleGroup: 'back', equipment: 'dumbbell', increment: 2 },
+  { id: 'ex_incline', name: '上斜啞鈴臥推', nameEn: 'Incline Dumbbell Press', muscleGroup: 'chest', equipment: 'dumbbell', increment: 2 },
+  { id: 'ex_lateral', name: '啞鈴側平舉', nameEn: 'Lateral Raise', muscleGroup: 'shoulders', equipment: 'dumbbell', increment: 1 },
+  { id: 'ex_facepull', name: '繩索面拉', nameEn: 'Face Pull', muscleGroup: 'shoulders', equipment: 'cable', increment: 2.5 },
+  { id: 'ex_legcurl', name: '腿後勾', nameEn: 'Leg Curl', muscleGroup: 'legs', equipment: 'machine', increment: 2.5 },
+  { id: 'ex_curl', name: '啞鈴二頭彎舉', nameEn: 'Dumbbell Curl', muscleGroup: 'arms', equipment: 'dumbbell', increment: 1 },
+  { id: 'ex_pushdown', name: '繩索三頭下壓', nameEn: 'Triceps Pushdown', muscleGroup: 'arms', equipment: 'cable', increment: 2.5 },
+]
+
+/** Typical working weight (kg) for a reference trainee; scaled per student in mock data. */
+export const REFERENCE_WEIGHT: Record<string, number> = {
+  ex_squat: 80,
+  ex_deadlift: 100,
+  ex_bench: 60,
+  ex_ohp: 37.5,
+  ex_latpd: 50,
+  ex_seatedrow: 50,
+  ex_dbpress: 22,
+  ex_legpress: 140,
+  ex_rdl: 70,
+  ex_cablerow: 50,
+  ex_hipthrust: 90,
+  ex_goblet: 20,
+  ex_bss: 14,
+  ex_dbrow: 22,
+  ex_incline: 18,
+  ex_lateral: 8,
+  ex_facepull: 20,
+  ex_legcurl: 35,
+  ex_curl: 10,
+  ex_pushdown: 25,
+}

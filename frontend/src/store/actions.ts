@@ -1,0 +1,336 @@
+// All mutations of AppData go through these actions. Each validates against
+// the latest state and returns a Result so the UI can show a precise error.
+import { generateMockData } from '../data/mock'
+import { uid } from '../lib/id'
+import { deductionBlocker, deductionFor, packageBalance, studentBalance } from '../lib/sessions'
+import type {
+  AppData,
+  ID,
+  Role,
+  SessionPackage,
+  Student,
+  TrainingPlan,
+  WorkoutSession,
+} from '../types'
+
+export type Result<T = undefined> = { ok: true; value: T } | { ok: false; error: string }
+
+const ok = <T,>(value: T): Result<T> => ({ ok: true, value })
+const fail = (error: string): Result<never> => ({ ok: false, error })
+const nowISO = () => new Date().toISOString()
+
+export type StudentInput = Pick<
+  Student,
+  'name' | 'email' | 'phone' | 'gender' | 'birthYear' | 'heightCm' | 'goal' | 'goalDetail' | 'weeklyFrequency' | 'coachNotes' | 'status'
+>
+
+export type PackageInput = Pick<SessionPackage, 'name' | 'totalSessions' | 'priceTwd' | 'purchaseDate' | 'expiresAt' | 'notes'>
+
+export function validateStudent(input: StudentInput, others: Student[]): Record<string, string> {
+  const errors: Record<string, string> = {}
+  if (!input.name.trim()) errors.name = '請輸入姓名'
+  if (!input.email.trim()) errors.email = '請輸入 Email'
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email.trim())) errors.email = 'Email 格式不正確'
+  else if (others.some((s) => s.email.toLowerCase() === input.email.trim().toLowerCase()))
+    errors.email = '此 Email 已被其他學員使用'
+  if (input.phone && !/^[0-9+\-\s()]{8,15}$/.test(input.phone)) errors.phone = '電話格式不正確'
+  if (input.weeklyFrequency < 1 || input.weeklyFrequency > 7) errors.weeklyFrequency = '每週 1–7 次'
+  if (input.heightCm != null && (input.heightCm < 100 || input.heightCm > 230)) errors.heightCm = '請輸入 100–230 之間'
+  if (input.birthYear != null && (input.birthYear < 1930 || input.birthYear > new Date().getFullYear() - 10))
+    errors.birthYear = '出生年份不合理'
+  return errors
+}
+
+export function validatePackage(input: PackageInput): Record<string, string> {
+  const errors: Record<string, string> = {}
+  if (!input.name.trim()) errors.name = '請輸入方案名稱'
+  if (!Number.isInteger(input.totalSessions) || input.totalSessions < 1 || input.totalSessions > 200)
+    errors.totalSessions = '堂數需為 1–200 的整數'
+  if (!Number.isFinite(input.priceTwd) || input.priceTwd < 0) errors.priceTwd = '金額不可為負數'
+  if (!input.purchaseDate) errors.purchaseDate = '請選擇購買日期'
+  if (input.expiresAt && input.purchaseDate && input.expiresAt < input.purchaseDate)
+    errors.expiresAt = '到期日不可早於購買日'
+  return errors
+}
+
+export function createActions(get: () => AppData, set: (next: AppData) => void, actor: () => Role) {
+  const update = (fn: (d: AppData) => AppData) => set(fn(get()))
+
+  return {
+    resetDemo() {
+      set(generateMockData())
+    },
+
+    // ---------------- Students ----------------
+    addStudent(input: StudentInput): Result<Student> {
+      const d = get()
+      const errors = validateStudent(input, d.students)
+      const first = Object.values(errors)[0]
+      if (first) return fail(first)
+      const now = nowISO()
+      const student: Student = {
+        ...input,
+        name: input.name.trim(),
+        email: input.email.trim(),
+        id: uid('stu'),
+        role: 'student',
+        createdAt: now,
+        joinedAt: now,
+      }
+      update((d) => ({
+        ...d,
+        students: [...d.students, student],
+        relationships: [
+          ...d.relationships,
+          { id: uid('rel'), coachId: d.coach.id, studentId: student.id, status: student.status, startedAt: now },
+        ],
+      }))
+      return ok(student)
+    },
+
+    updateStudent(id: ID, patch: Partial<Student>): Result<Student> {
+      const d = get()
+      const current = d.students.find((s) => s.id === id)
+      if (!current) return fail('找不到此學員')
+      const next = { ...current, ...patch, id, role: 'student' as const }
+      const errors = validateStudent(next, d.students.filter((s) => s.id !== id))
+      const first = Object.values(errors)[0]
+      if (first) return fail(first)
+      update((d) => ({
+        ...d,
+        students: d.students.map((s) => (s.id === id ? next : s)),
+        relationships: d.relationships.map((r) => (r.studentId === id ? { ...r, status: next.status } : r)),
+      }))
+      return ok(next)
+    },
+
+    deleteStudent(id: ID): Result {
+      update((d) => ({
+        ...d,
+        students: d.students.filter((s) => s.id !== id),
+        relationships: d.relationships.filter((r) => r.studentId !== id),
+        workouts: d.workouts.filter((w) => w.studentId !== id),
+        packages: d.packages.filter((p) => p.studentId !== id),
+        transactions: d.transactions.filter((t) => t.studentId !== id),
+        metrics: d.metrics.filter((m) => m.studentId !== id),
+        appointments: d.appointments.filter((a) => a.studentId !== id),
+      }))
+      return ok(undefined)
+    },
+
+    // ---------------- Plans ----------------
+    savePlan(plan: TrainingPlan): Result<TrainingPlan> {
+      if (!plan.name.trim()) return fail('請輸入課表名稱')
+      if (!plan.days.length) return fail('課表至少需要一個訓練日')
+      const emptyDay = plan.days.find((dy) => !dy.name.trim())
+      if (emptyDay) return fail('每個訓練日都需要名稱')
+      for (const dy of plan.days)
+        for (const rx of dy.exercises)
+          if (!Number.isInteger(rx.sets) || rx.sets < 1 || rx.sets > 20) return fail(`「${dy.name}」有組數不正確的動作`)
+      const saved: TrainingPlan = { ...plan, name: plan.name.trim(), authorRole: 'coach', updatedAt: nowISO() }
+      update((d) => ({
+        ...d,
+        plans: d.plans.some((p) => p.id === plan.id)
+          ? d.plans.map((p) => (p.id === plan.id ? saved : p))
+          : [...d.plans, saved],
+      }))
+      return ok(saved)
+    },
+
+    duplicatePlan(id: ID): Result<TrainingPlan> {
+      const src = get().plans.find((p) => p.id === id)
+      if (!src) return fail('找不到課表')
+      const now = nowISO()
+      const copy: TrainingPlan = {
+        ...structuredClone(src),
+        id: uid('plan'),
+        name: `${src.name}（副本）`,
+        createdAt: now,
+        updatedAt: now,
+      }
+      copy.days = copy.days.map((dy) => ({
+        ...dy,
+        id: uid('day'),
+        exercises: dy.exercises.map((rx) => ({ ...rx, id: uid('rx') })),
+      }))
+      update((d) => ({ ...d, plans: [...d.plans, copy] }))
+      return ok(copy)
+    },
+
+    deletePlan(id: ID): Result {
+      update((d) => ({
+        ...d,
+        plans: d.plans.filter((p) => p.id !== id),
+        students: d.students.map((s) => (s.activePlanId === id ? { ...s, activePlanId: undefined } : s)),
+      }))
+      return ok(undefined)
+    },
+
+    /** Sets exactly `studentIds` as the students on this plan. */
+    assignPlan(planId: ID, studentIds: ID[]): Result {
+      if (!get().plans.some((p) => p.id === planId)) return fail('找不到課表')
+      const chosen = new Set(studentIds)
+      update((d) => ({
+        ...d,
+        students: d.students.map((s) => {
+          if (chosen.has(s.id)) return { ...s, activePlanId: planId }
+          if (s.activePlanId === planId) return { ...s, activePlanId: undefined }
+          return s
+        }),
+      }))
+      return ok(undefined)
+    },
+
+    // ---------------- Workouts ----------------
+    saveWorkout(workout: WorkoutSession): Result<WorkoutSession> {
+      const d = get()
+      if (!d.students.some((s) => s.id === workout.studentId)) return fail('請選擇學員')
+      const existing = d.workouts.find((w) => w.id === workout.id)
+      if (existing && existing.studentId !== workout.studentId && deductionFor(existing.id, d.transactions))
+        return fail('已扣堂的課程無法更換學員')
+      const role = actor()
+      // Students can only log independent workouts for themselves.
+      if (role === 'student' && workout.type !== 'independent') return fail('學員只能記錄自主訓練')
+      if (workout.status === 'completed') {
+        const hasSet = workout.exercises.some((e) => e.sets.some((s) => s.completed))
+        if (!hasSet) return fail('請至少完成一組再結束訓練')
+      }
+      const saved = { ...workout, updatedAt: nowISO() }
+      update((d) => ({
+        ...d,
+        workouts: existing ? d.workouts.map((w) => (w.id === saved.id ? saved : w)) : [...d.workouts, saved],
+      }))
+      return ok(saved)
+    },
+
+    deleteWorkout(id: ID): Result {
+      const d = get()
+      if (deductionFor(id, d.transactions)) return fail('此課程已扣堂，請先撤銷扣堂再刪除')
+      update((d) => ({ ...d, workouts: d.workouts.filter((w) => w.id !== id) }))
+      return ok(undefined)
+    },
+
+    // ---------------- Session packages ----------------
+    /** Deduct one coaching session for a completed coached workout. Never automatic. */
+    deductSession(workoutId: ID): Result<{ packageName: string; remaining: number }> {
+      const d = get()
+      if (actor() !== 'coach') return fail('只有教練可以扣除堂數')
+      const workout = d.workouts.find((w) => w.id === workoutId)
+      if (!workout) return fail('找不到此訓練紀錄')
+      const balance = studentBalance(workout.studentId, d.packages, d.transactions)
+      const blocker = deductionBlocker(workout, balance, d.transactions)
+      if (blocker) return fail(blocker)
+      const pkg = balance.nextPackage!
+      update((d) => ({
+        ...d,
+        transactions: [
+          ...d.transactions,
+          {
+            id: uid('tx'),
+            packageId: pkg.pkg.id,
+            studentId: workout.studentId,
+            type: 'deduction',
+            delta: -1,
+            reason: `${workout.title} 上課扣堂`,
+            workoutSessionId: workout.id,
+            createdAt: nowISO(),
+            createdBy: 'coach',
+          },
+        ],
+      }))
+      return ok({ packageName: pkg.pkg.name, remaining: balance.remaining - 1 })
+    },
+
+    reverseDeduction(workoutId: ID, reason: string): Result {
+      const d = get()
+      if (actor() !== 'coach') return fail('只有教練可以調整堂數')
+      const tx = deductionFor(workoutId, d.transactions)
+      if (!tx) return fail('此課程尚未扣堂')
+      if (!reason.trim()) return fail('請輸入撤銷原因')
+      update((d) => ({
+        ...d,
+        transactions: [
+          ...d.transactions,
+          {
+            id: uid('tx'),
+            packageId: tx.packageId,
+            studentId: tx.studentId,
+            type: 'reversal',
+            delta: 1,
+            reason: reason.trim(),
+            workoutSessionId: workoutId,
+            createdAt: nowISO(),
+            createdBy: 'coach',
+          },
+        ],
+      }))
+      return ok(undefined)
+    },
+
+    addPackage(studentId: ID, input: PackageInput): Result<SessionPackage> {
+      const first = Object.values(validatePackage(input))[0]
+      if (first) return fail(first)
+      if (!get().students.some((s) => s.id === studentId)) return fail('找不到此學員')
+      const pkg: SessionPackage = {
+        ...input,
+        name: input.name.trim(),
+        id: uid('pkg'),
+        studentId,
+        coachId: get().coach.id,
+      }
+      update((d) => ({ ...d, packages: [...d.packages, pkg] }))
+      return ok(pkg)
+    },
+
+    updatePackage(id: ID, input: PackageInput): Result {
+      const d = get()
+      const pkg = d.packages.find((p) => p.id === id)
+      if (!pkg) return fail('找不到方案')
+      const first = Object.values(validatePackage(input))[0]
+      if (first) return fail(first)
+      const bal = packageBalance(pkg, d.transactions)
+      if (input.totalSessions + bal.adjusted - bal.used < 0)
+        return fail(`此方案已使用 ${bal.used} 堂，總堂數不可低於已使用數`)
+      update((d) => ({ ...d, packages: d.packages.map((p) => (p.id === id ? { ...p, ...input, name: input.name.trim() } : p)) }))
+      return ok(undefined)
+    },
+
+    deletePackage(id: ID): Result {
+      const d = get()
+      if (d.transactions.some((t) => t.packageId === id)) return fail('此方案已有異動紀錄，無法刪除')
+      update((d) => ({ ...d, packages: d.packages.filter((p) => p.id !== id) }))
+      return ok(undefined)
+    },
+
+    adjustPackage(packageId: ID, delta: number, reason: string): Result<number> {
+      const d = get()
+      if (actor() !== 'coach') return fail('只有教練可以調整堂數')
+      const pkg = d.packages.find((p) => p.id === packageId)
+      if (!pkg) return fail('找不到方案')
+      if (!Number.isInteger(delta) || delta === 0) return fail('調整數量需為非 0 的整數')
+      if (Math.abs(delta) > 50) return fail('單次調整不可超過 50 堂')
+      if (!reason.trim()) return fail('請輸入調整原因')
+      const bal = packageBalance(pkg, d.transactions)
+      if (bal.remaining + delta < 0) return fail(`剩餘 ${bal.remaining} 堂，無法扣除 ${-delta} 堂（餘額不可為負）`)
+      update((d) => ({
+        ...d,
+        transactions: [
+          ...d.transactions,
+          {
+            id: uid('tx'),
+            packageId,
+            studentId: pkg.studentId,
+            type: 'adjustment',
+            delta,
+            reason: reason.trim(),
+            createdAt: nowISO(),
+            createdBy: 'coach',
+          },
+        ],
+      }))
+      return ok(bal.remaining + delta)
+    },
+  }
+}
+
+export type DataActions = ReturnType<typeof createActions>

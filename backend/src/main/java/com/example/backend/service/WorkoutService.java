@@ -1,0 +1,141 @@
+package com.example.backend.service;
+
+import com.example.backend.auth.CurrentUser;
+import com.example.backend.common.ApiException;
+import com.example.backend.common.Domain;
+import com.example.backend.common.Ids;
+import com.example.backend.domain.Exercise;
+import com.example.backend.domain.SessionTransaction;
+import com.example.backend.domain.Student;
+import com.example.backend.domain.Workout;
+import com.example.backend.store.Db;
+import com.example.backend.store.ExerciseCatalog;
+import com.example.backend.web.Dtos.ExerciseLogDto;
+import com.example.backend.web.Dtos.SetLogDto;
+import com.example.backend.web.Dtos.WorkoutDto;
+import com.google.cloud.firestore.Query;
+import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.springframework.stereotype.Service;
+
+/**
+ * Workout logging. Saving a workout NEVER touches session balances — billing is a separate,
+ * explicit action in {@link BillingService#deduct}.
+ */
+@Service
+public class WorkoutService {
+
+    private final Db db;
+    private final ExerciseCatalog catalog;
+    private final AccessService access;
+
+    public WorkoutService(Db db, ExerciseCatalog catalog, AccessService access) {
+        this.db = db;
+        this.catalog = catalog;
+        this.access = access;
+    }
+
+    public List<WorkoutDto> list(CurrentUser user, String studentId) {
+        Query q = db.coachCol(user.coachId(), Db.WORKOUTS);
+        if (studentId != null) {
+            access.student(user, studentId);
+            q = q.whereEqualTo("studentId", studentId);
+        } else if (user.isStudent()) {
+            q = q.whereEqualTo("studentId", user.userId());
+        }
+        return db.list(q, Workout.class).stream()
+                .sorted(Comparator.comparing((Workout w) -> w.startedAt).reversed())
+                .map(Mapper::workout)
+                .toList();
+    }
+
+    public WorkoutDto get(CurrentUser user, String id) {
+        Workout w = db.get(db.coachDoc(user.coachId(), Db.WORKOUTS, id), Workout.class).orElseThrow(WorkoutService::notFound);
+        if (user.isStudent() && !w.studentId.equals(user.userId())) throw notFound();
+        return Mapper.workout(w);
+    }
+
+    /** Create or replace a workout (drafts autosave through here too). */
+    public WorkoutDto save(CurrentUser user, String id, WorkoutDto in) {
+        String workoutId = Ids.orNew(id, "wo");
+        Domain.require(Domain.WORKOUT_TYPES, in.type(), "type");
+        Domain.require(Domain.WORKOUT_STATUSES, in.status(), "status");
+        Student student = access.student(user, in.studentId());
+        if (user.isStudent() && !"independent".equals(in.type())) throw ApiException.forbidden("學員只能記錄自主訓練");
+        boolean completed = "completed".equals(in.status());
+        if (completed && in.exercises().stream().noneMatch(e -> e.sets().stream().anyMatch(SetLogDto::completed))) {
+            throw ApiException.badRequest("請至少完成一組再結束訓練");
+        }
+        validateExercises(in.exercises());
+
+        var ref = db.coachDoc(user.coachId(), Db.WORKOUTS, workoutId);
+        return db.transaction(tx -> {
+            Workout existing = tx.get(ref, Workout.class).orElse(null);
+            if (existing != null) {
+                if (user.isStudent() && (!existing.studentId.equals(user.userId()) || !Domain.STUDENT.equals(existing.createdBy))) {
+                    throw ApiException.forbidden("無法修改教練記錄的課程");
+                }
+                List<SessionTransaction> linked = tx.list(db.coachCol(user.coachId(), Db.TRANSACTIONS).whereEqualTo("workoutId", workoutId), SessionTransaction.class);
+                if (Ledger.netForWorkout(workoutId, linked) < 0) {
+                    if (!existing.studentId.equals(in.studentId())) throw ApiException.conflict("already_deducted", "已扣堂的課程無法更換學員");
+                    if (!"coached".equals(in.type())) throw ApiException.conflict("already_deducted", "已扣堂的課程無法改為自主訓練");
+                    if (!completed) throw ApiException.conflict("already_deducted", "已扣堂的課程無法改回草稿");
+                }
+            }
+            Instant now = Instant.now();
+            Workout w = new Workout();
+            w.id = workoutId;
+            w.createdBy = existing != null ? existing.createdBy : (user.isStudent() ? Domain.STUDENT : Domain.COACH);
+            w.billingRevision = existing != null ? existing.billingRevision : 0;
+            w.studentId = student.id;
+            w.coachId = "coached".equals(in.type()) ? student.coachId : null;
+            w.type = in.type();
+            w.status = in.status();
+            w.title = in.title() == null || in.title().isBlank() ? "自由訓練" : in.title().trim();
+            w.planId = in.planId();
+            w.trainingDayId = in.trainingDayId();
+            w.startedAt = in.startedAt();
+            w.completedAt = completed ? (in.completedAt() != null ? in.completedAt() : now) : null;
+            w.updatedAt = now;
+            w.notes = in.notes() == null ? "" : in.notes();
+            for (ExerciseLogDto l : in.exercises()) {
+                List<SetLogDto> sets = l.sets().stream().map(s -> new SetLogDto(Ids.orNew(s.id(), "set"), s.weightKg(), s.reps(), s.rpe(), s.completed())).toList();
+                w.exercises.add(Mapper.logDoc(new ExerciseLogDto(l.id(), l.exerciseId(), sets, l.notes()), Ids.orNew(l.id(), "el")));
+            }
+            tx.set(ref, w);
+            return Mapper.workout(w);
+        });
+    }
+
+    public void delete(CurrentUser user, String id) {
+        var ref = db.coachDoc(user.coachId(), Db.WORKOUTS, id);
+        db.transaction(tx -> {
+            Workout w = tx.get(ref, Workout.class).orElseThrow(WorkoutService::notFound);
+            if (user.isStudent()) {
+                if (!w.studentId.equals(user.userId())) throw notFound();
+                if (!Domain.STUDENT.equals(w.createdBy)) throw ApiException.forbidden("無法刪除教練記錄的課程");
+            }
+            List<SessionTransaction> linked = tx.list(db.coachCol(user.coachId(), Db.TRANSACTIONS).whereEqualTo("workoutId", id), SessionTransaction.class);
+            if (Ledger.netForWorkout(id, linked) < 0) throw ApiException.conflict("already_deducted", "此課程已扣堂，請先撤銷扣堂再刪除");
+            tx.delete(ref);
+            return null;
+        });
+    }
+
+    private void validateExercises(List<ExerciseLogDto> logs) {
+        Set<String> known = catalog.all().stream().map((Exercise e) -> e.id).collect(Collectors.toSet());
+        for (ExerciseLogDto l : logs) {
+            if (!known.contains(l.exerciseId())) throw ApiException.badRequest("未知的動作：" + l.exerciseId());
+            for (SetLogDto s : l.sets()) {
+                if (s.completed() && (s.reps() == null || s.reps() <= 0)) throw ApiException.badRequest("已完成的組數需要填寫次數");
+            }
+        }
+    }
+
+    private static ApiException notFound() {
+        return ApiException.notFound("找不到此訓練紀錄");
+    }
+}
