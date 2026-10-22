@@ -137,7 +137,15 @@ function createDataStore(onSignOut: () => void, notify: (m: string, k?: ToastKin
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<DemoSession | null>(() => readJSON<DemoSession>(STORAGE_KEYS.session))
+  const [session, setSession] = useState<DemoSession | null>(() => {
+    const stored = readJSON<DemoSession>(STORAGE_KEYS.session)
+    // A token-less session is a leftover offline-demo sign-in; against the backend it would show empty data.
+    if (stored && isApiMode && !stored.token) {
+      writeJSON(STORAGE_KEYS.session, null)
+      return null
+    }
+    return stored
+  })
   const signIn = useCallback((s: DemoSession) => {
     writeJSON(STORAGE_KEYS.session, s)
     setSession(s)

@@ -2,7 +2,7 @@ import { ArrowLeftRight, LogOut, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { demoLogin } from '../../api/auth'
-import { isApiMode } from '../../api/client'
+import { exitLocalDemo, isApiMode, isLocalDemo } from '../../api/client'
 import { DEFAULT_DEMO_STUDENT_ID } from '../../data/mock'
 import { useData, useSession, useToast } from '../../store/contexts'
 import type { Role } from '../../types'
@@ -233,11 +233,12 @@ function DemoRoleSwitcher({ placement }: { placement: Placement }) {
               size="sm"
               icon={LogOut}
               onClick={() => {
+                if (isLocalDemo) return exitLocalDemo()
                 signOut()
                 navigate('/login')
               }}
             >
-              {isApiMode ? "登出" : "回到登入頁"}
+              {isApiMode ? '登出' : isLocalDemo ? '離開示範' : '回到登入頁'}
             </Button>
           </div>
         </div>

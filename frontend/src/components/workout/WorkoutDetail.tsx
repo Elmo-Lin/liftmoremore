@@ -1,6 +1,6 @@
 import { ChevronRight, Clock, Ticket, Trash2, Undo2 } from 'lucide-react'
 import { useState } from 'react'
-import { compactKg, durationMin, formatDate, formatTime } from '../../lib/format'
+import { durationMin, formatDate, formatTime, volumeKg } from '../../lib/format'
 import { deductionFor } from '../../lib/sessions'
 import { completedSets, workoutSetCount, workoutVolume } from '../../lib/stats'
 import { useData, useToast } from '../../store/contexts'
@@ -63,7 +63,7 @@ export function WorkoutRow({
         </div>
         <p className="tabular mt-0.5 text-xs text-ink-500">
           {student ? `${formatDate(when, { weekday: true })} ` : ''}
-          {formatTime(workout.startedAt)}・{workout.exercises.length} 個動作・{workoutSetCount(workout)} 組・{compactKg(workoutVolume(workout))}
+          {formatTime(workout.startedAt)}・{workout.exercises.length} 個動作・{workoutSetCount(workout)} 組・{volumeKg(workoutVolume(workout))}
         </p>
       </div>
       <ChevronRight className="size-4 shrink-0 text-ink-300" />
@@ -154,7 +154,7 @@ export function WorkoutDetailModal({
           </div>
           <div>
             <p className="text-xs text-ink-500">訓練量</p>
-            <p className="text-lg font-semibold text-ink-900">{compactKg(workoutVolume(current))}</p>
+            <p className="text-lg font-semibold text-ink-900">{volumeKg(workoutVolume(current))}</p>
           </div>
         </div>
         <div className="space-y-3">

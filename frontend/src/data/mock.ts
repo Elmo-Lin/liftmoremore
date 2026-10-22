@@ -195,7 +195,7 @@ interface Profile {
 const PROFILES: Profile[] = [
   {
     student: {
-      id: 'stu_01', name: '陳怡君', email: 'yijun.chen@example.com', phone: '0912-345-678', gender: 'female',
+      id: 'stu_01', name: 'Emily Chen', email: 'emily.chen@example.com', phone: '0912-345-678', gender: 'female',
       birthYear: 1994, heightCm: 162, goal: 'hypertrophy', goalDetail: '增加上半身線條，半年內臥推做到 40 kg',
       status: 'active', weeklyFrequency: 3, activePlanId: 'plan_upperlower',
       coachNotes: '動作學習快，臥推離心控制已明顯進步。工作日晚上時間較穩定，週末偶爾出差。',
@@ -206,7 +206,7 @@ const PROFILES: Profile[] = [
   },
   {
     student: {
-      id: 'stu_02', name: '王志明', email: 'chihming.wang@example.com', phone: '0928-112-334', gender: 'male',
+      id: 'stu_02', name: 'Kevin Wang', email: 'kevin.wang@example.com', phone: '0928-112-334', gender: 'male',
       birthYear: 1988, heightCm: 175, goal: 'strength', goalDetail: '深蹲突破 140 kg，提升整體肌力',
       status: 'active', weeklyFrequency: 3, activePlanId: 'plan_strength',
       coachNotes: '工程師，久坐。深蹲底部髖關節活動度需持續熱身。偏好早上 7 點上課。',
@@ -216,7 +216,7 @@ const PROFILES: Profile[] = [
   },
   {
     student: {
-      id: 'stu_03', name: '李佳穎', email: 'chiaying.lee@example.com', phone: '0935-776-210', gender: 'female',
+      id: 'stu_03', name: 'Grace Lee', email: 'grace.lee@example.com', phone: '0935-776-210', gender: 'female',
       birthYear: 1997, heightCm: 158, goal: 'fatLoss', goalDetail: '三個月內體重下降 4 kg，維持每週 3 次訓練',
       status: 'active', weeklyFrequency: 3, activePlanId: 'plan_fatloss',
       coachNotes: '有在記錄飲食。動作穩定度佳，可逐步縮短組間休息。',
@@ -226,7 +226,7 @@ const PROFILES: Profile[] = [
   },
   {
     student: {
-      id: 'stu_04', name: '張家豪', email: 'chiahao.chang@example.com', phone: '0910-558-902', gender: 'male',
+      id: 'stu_04', name: 'Eric Chang', email: 'eric.chang@example.com', phone: '0910-558-902', gender: 'male',
       birthYear: 1992, heightCm: 178, goal: 'powerlifting', goalDetail: '明年春季健力賽，三項總和目標 500 kg',
       status: 'active', weeklyFrequency: 4, activePlanId: 'plan_powerlifting',
       coachNotes: '比賽經驗 1 次。硬舉起槓時背部角度需注意，臥推暫停節奏要再練。',
@@ -236,7 +236,7 @@ const PROFILES: Profile[] = [
   },
   {
     student: {
-      id: 'stu_05', name: '劉雅婷', email: 'yating.liu@example.com', phone: '0921-300-457', gender: 'female',
+      id: 'stu_05', name: 'Tiffany Liu', email: 'tiffany.liu@example.com', phone: '0921-300-457', gender: 'female',
       birthYear: 1985, heightCm: 165, goal: 'general', goalDetail: '建立運動習慣，日常搬重物更輕鬆',
       status: 'active', weeklyFrequency: 2, activePlanId: 'plan_fullbody',
       coachNotes: '兩個孩子的媽媽，時間以平日上午為主。喜歡有明確進度的課表。',
@@ -246,7 +246,7 @@ const PROFILES: Profile[] = [
   },
   {
     student: {
-      id: 'stu_06', name: '黃冠宇', email: 'kuanyu.huang@example.com', phone: '0987-221-064', gender: 'male',
+      id: 'stu_06', name: 'Ryan Huang', email: 'ryan.huang@example.com', phone: '0987-221-064', gender: 'male',
       birthYear: 1999, heightCm: 172, goal: 'hypertrophy', goalDetail: '增重 5 kg，以肌肉量為主',
       status: 'active', weeklyFrequency: 4, activePlanId: 'plan_upperlower',
       coachNotes: '大學研究生，自主訓練頻率高，記錄習慣好。飲食蛋白質攝取需再提醒。',
@@ -257,7 +257,7 @@ const PROFILES: Profile[] = [
   },
   {
     student: {
-      id: 'stu_07', name: '吳欣怡', email: 'hsinyi.wu@example.com', phone: '0916-884-120', gender: 'female',
+      id: 'stu_07', name: 'Cindy Wu', email: 'cindy.wu@example.com', phone: '0916-884-120', gender: 'female',
       birthYear: 1990, heightCm: 160, goal: 'mobility', goalDetail: '改善圓肩姿勢，提升核心穩定',
       status: 'active', weeklyFrequency: 1, activePlanId: 'plan_fullbody',
       coachNotes: '辦公室工作，每次課前做 10 分鐘胸椎活動。目前以每週一堂為主。',
@@ -267,7 +267,7 @@ const PROFILES: Profile[] = [
   },
   {
     student: {
-      id: 'stu_08', name: '蔡承翰', email: 'chenghan.tsai@example.com', phone: '0933-650-781', gender: 'male',
+      id: 'stu_08', name: 'Jerry Tsai', email: 'jerry.tsai@example.com', phone: '0933-650-781', gender: 'male',
       birthYear: 1979, heightCm: 170, goal: 'general', goalDetail: '維持肌力，配合週末登山',
       status: 'active', weeklyFrequency: 2, activePlanId: 'plan_fullbody',
       coachNotes: '週末常登山，週一安排較輕的課程。',
@@ -277,7 +277,7 @@ const PROFILES: Profile[] = [
   },
   {
     student: {
-      id: 'stu_09', name: '鄭宇翔', email: 'yuhsiang.cheng@example.com', phone: '0955-410-236', gender: 'male',
+      id: 'stu_09', name: 'Leo Cheng', email: 'leo.cheng@example.com', phone: '0955-410-236', gender: 'male',
       birthYear: 1995, heightCm: 180, goal: 'strength', goalDetail: '提升三大項肌力',
       status: 'inactive', weeklyFrequency: 2, activePlanId: 'plan_strength',
       coachNotes: '方案用完後暫停，表示工作穩定後會回來。',
@@ -287,7 +287,7 @@ const PROFILES: Profile[] = [
   },
   {
     student: {
-      id: 'stu_10', name: '許詩涵', email: 'shihhan.hsu@example.com', phone: '0975-302-118', gender: 'female',
+      id: 'stu_10', name: 'Vivian Hsu', email: 'vivian.hsu@example.com', phone: '0975-302-118', gender: 'female',
       birthYear: 2001, heightCm: 166, goal: 'hypertrophy', goalDetail: '臀腿線條',
       status: 'inactive', weeklyFrequency: 2, activePlanId: 'plan_fullbody',
       coachNotes: '出國交換一學期，明年 2 月回台後繼續，剩餘堂數保留。',
@@ -297,7 +297,7 @@ const PROFILES: Profile[] = [
   },
   {
     student: {
-      id: 'stu_11', name: '林柏宏', email: 'pohung.lin@example.com', phone: '0918-907-643', gender: 'male',
+      id: 'stu_11', name: 'Allen Lin', email: 'allen.lin@example.com', phone: '0918-907-643', gender: 'male',
       birthYear: 1993, heightCm: 173, goal: 'fatLoss', goalDetail: '體重下降並提升體能，能連續爬樓梯不喘',
       status: 'active', weeklyFrequency: 2, activePlanId: 'plan_fatloss',
       coachNotes: '新學員，先以動作學習為主，重量保守。',
@@ -343,11 +343,11 @@ export function generateMockData(nowDate = new Date()): AppData {
   const coach: Coach = {
     id: COACH_ID,
     role: 'coach',
-    name: '林子傑',
-    email: 'coach.lin@example.com',
+    name: 'Jason Lin',
+    email: 'jason.lin@example.com',
     phone: '0900-000-123',
     title: '肌力與體能教練',
-    studio: '子傑肌力工作室（台北大安）',
+    studio: 'Jason 肌力工作室（台北大安）',
     createdAt: new Date(now - 400 * DAY).toISOString(),
   }
 
@@ -545,7 +545,7 @@ export function generateMockData(nowDate = new Date()): AppData {
           studentId: student.id,
           startAt: date.toISOString(),
           durationMin: 60,
-          location: '子傑肌力工作室',
+          location: 'Jason 肌力工作室',
           status: 'scheduled',
         })
       }
@@ -568,7 +568,7 @@ export function generateMockData(nowDate = new Date()): AppData {
       studentId,
       startAt: at.toISOString(),
       durationMin: 60,
-      location: '子傑肌力工作室',
+      location: 'Jason 肌力工作室',
       status: 'scheduled',
     })
   }

@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatDate } from '../../lib/format'
+import { formatDate, volumeKg } from '../../lib/format'
 import type { ExercisePoint, WeekBucket } from '../../lib/stats'
 import { SERIES_1, SERIES_2 } from './chartColors'
 
@@ -130,7 +130,7 @@ export function WeeklyVolumeChart({ buckets }: { buckets: WeekBucket[] }) {
             content={tip<WeekBucket>((r) => (
                 <TooltipBox
                   title={`${r.label} 當週`}
-                  rows={[{ color: SERIES_1, label: '訓練量', value: `${Math.round(r.volume).toLocaleString('zh-TW')} kg` }]}
+                  rows={[{ color: SERIES_1, label: '訓練量', value: volumeKg(r.volume) }]}
                 />
             ))}
           />

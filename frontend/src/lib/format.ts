@@ -8,8 +8,9 @@ export const twd = (n: number) => `NT$ ${Math.round(n).toLocaleString('zh-TW')}`
 export const kg = (n: number | null | undefined) =>
   n == null ? '—' : `${Number.isInteger(n) ? n : n.toFixed(1)} kg`
 
-export const compactKg = (n: number) =>
-  n >= 10000 ? `${(n / 1000).toFixed(1)} 噸` : `${Math.round(n).toLocaleString('zh-TW')} kg`
+/** Training volume, always in kg with thousands separators (e.g. 125,430). */
+export const volumeNumber = (n: number) => Math.round(n).toLocaleString('zh-TW')
+export const volumeKg = (n: number) => `${volumeNumber(n)} kg`
 
 export function startOfDay(d: Date | string): Date {
   const x = new Date(d)

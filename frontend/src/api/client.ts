@@ -1,8 +1,49 @@
 // Thin fetch wrapper for the Lift More More backend. Enabled when VITE_API_URL is set
 // (e.g. http://localhost:8080/api); otherwise the app runs as an offline demo.
 
+import { BRAND } from '../config/brand'
+import { STORAGE_KEYS, writeJSON } from '../store/storage'
+import type { DemoSession } from '../types'
+
 export const API_URL: string | undefined = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || undefined
-export const isApiMode = Boolean(API_URL)
+
+// Visitors to a backend-connected site can still try the app: "local demo" switches this browser to
+// the offline demo (mock data kept in localStorage) without touching the server. A full page load is
+// needed to switch, because the data store picks its mode once at startup.
+const LOCAL_DEMO_KEY = `${BRAND.storagePrefix}:local-demo`
+
+function readLocalDemoFlag() {
+  try {
+    return localStorage.getItem(LOCAL_DEMO_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export const isLocalDemo = Boolean(API_URL) && readLocalDemoFlag()
+export const isApiMode = Boolean(API_URL) && !isLocalDemo
+
+export function enterLocalDemo(session: DemoSession, path: string) {
+  try {
+    localStorage.setItem(LOCAL_DEMO_KEY, '1')
+  } catch {
+    return false
+  }
+  writeJSON(STORAGE_KEYS.session, session)
+  window.location.assign(path)
+  return true
+}
+
+/** Back to the real (backend) site, signed out. Demo data stays in this browser for next time. */
+export function exitLocalDemo() {
+  try {
+    localStorage.removeItem(LOCAL_DEMO_KEY)
+  } catch {
+    // Storage unavailable: the flag could not have been set either.
+  }
+  writeJSON(STORAGE_KEYS.session, null)
+  window.location.assign('/login')
+}
 
 export class ApiError extends Error {
   readonly status: number

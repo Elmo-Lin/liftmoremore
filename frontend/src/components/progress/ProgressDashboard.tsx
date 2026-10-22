@@ -1,6 +1,6 @@
 import { ChartLine, Table2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { compactKg, formatDate } from '../../lib/format'
+import { formatDate, volumeNumber } from '../../lib/format'
 import {
   consistency,
   exerciseSeries,
@@ -104,7 +104,7 @@ export function ProgressDashboard({ studentId, audience }: { studentId: ID; audi
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="訓練次數" value={inRange.length} unit="次" sub={isSelf ? undefined : `教練課 ${coachedCount}・自主 ${inRange.length - coachedCount}`} />
-        <Stat label="總訓練量" value={compactKg(totalVolume)} sub="重量 × 次數，僅計入完成組" />
+        <Stat label="總訓練量" value={volumeNumber(totalVolume)} unit="kg" sub="重量 × 次數，僅計入完成組" />
         <Stat label="平均每週" value={(inRange.length / Math.max(1, buckets.length)).toFixed(1)} unit="次" sub={`目標每週 ${target} 次`} />
         <Stat label="訓練一致性" value={`${consistencyPct}%`} sub={`達到每週 ${target} 次的週數比例`} />
       </div>

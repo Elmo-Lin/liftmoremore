@@ -1,8 +1,8 @@
 import { ArrowRight, ChartLine, ClipboardList, Dumbbell, Ticket, UserRound, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { activateInvite, demoLogin, login, registerCoach, registerSelf } from '../api/auth'
-import { isApiMode } from '../api/client'
+import { activateInvite, login, registerCoach, registerSelf } from '../api/auth'
+import { enterLocalDemo, exitLocalDemo, isApiMode, isLocalDemo } from '../api/client'
 import { Logo } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
 import { Segmented, TextInput } from '../components/ui/Form'
@@ -13,10 +13,10 @@ import { DEFAULT_DEMO_STUDENT_ID } from '../data/mock'
 import { useData, useSession, useToast } from '../store/contexts'
 
 const FEATURES = [
-  { icon: Users, title: '學員管理', text: '目標、備註與訓練頻率集中在一處。' },
-  { icon: Dumbbell, title: '快速記錄', text: '為手機操作設計，一組只需幾次點擊。' },
-  { icon: Ticket, title: '堂數清楚', text: '記錄訓練與扣堂分開，每筆異動都留紀錄。' },
-  { icon: ChartLine, title: '看得見進步', text: '重量、訓練量與頻率，用一致的指標呈現。' },
+  { icon: Dumbbell, title: '快速記錄', text: '為手機設計，一組只需幾次點擊。' },
+  { icon: ChartLine, title: '看得見進步', text: '重量、訓練量與頻率一目了然。' },
+  { icon: Users, title: '學員管理', text: '教練可集中管理學員與課表。' },
+  { icon: Ticket, title: '堂數清楚', text: '記錄訓練與扣堂分開，異動都留紀錄。' },
 ]
 
 export function LoginPage() {
@@ -40,62 +40,79 @@ export function LoginPage() {
 
   return (
     <div className="min-h-dvh bg-canvas">
-      <div className="mx-auto grid min-h-dvh max-w-6xl gap-10 px-4 py-8 md:grid-cols-[1.1fr_1fr] md:items-center md:gap-16 md:px-8">
-        <section>
+      {/* Mobile: headline → sign-in → features, so sign-in is reachable without scrolling.
+          Desktop: headline and features on the left, sign-in on the right. */}
+      <div className="mx-auto grid min-h-dvh max-w-6xl content-start gap-6 px-4 py-6 md:grid-cols-[1.1fr_1fr] md:content-center md:gap-x-16 md:gap-y-8 md:px-8 md:py-8">
+        <section className="md:col-start-1 md:row-start-1 md:self-end">
           <Logo />
-          <h1 className="mt-10 text-[30px] leading-tight font-semibold tracking-tight text-ink-900 md:text-[40px]">
-            {BRAND.tagline.split('，')[0]}，
+          <h1 className="mt-6 text-[30px] leading-tight font-semibold tracking-tight text-ink-900 md:mt-10 md:text-[40px]">
+            {BRAND.tagline[0]}
             <br />
-            <span className="text-accent-700">{BRAND.tagline.split('，')[1]}</span>
+            <span className="text-accent-700">{BRAND.tagline[1]}</span>
           </h1>
           <p className="mt-4 max-w-md text-[15px] leading-relaxed text-ink-600">
-            為台灣獨立教練打造的課程管理工具：學員、課表、堂數與訓練紀錄，一個地方搞定。
+            為台灣自由教練打造的課程管理工具：學員、課表、堂數與訓練紀錄，一個地方搞定。自己練的人也能用它記錄訓練、追蹤進步。
           </p>
-          <ul className="mt-8 grid max-w-lg gap-4 sm:grid-cols-2">
-            {FEATURES.map((f) => (
-              <li key={f.title} className="flex gap-3">
-                <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-accent-700">
-                  <f.icon className="size-4" />
-                </span>
-                <div>
-                  <p className="text-sm font-medium text-ink-900">{f.title}</p>
-                  <p className="mt-0.5 text-[13px] leading-relaxed text-ink-500">{f.text}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
         </section>
 
-        {isApiMode ? (
-          <ApiAuthPanel />
-        ) : (
-        <section className="rounded-2xl border border-line bg-surface p-6 shadow-[0_1px_2px_rgba(0,0,0,0.03)] md:p-8">
-          <h2 className="text-lg font-semibold text-ink-900">進入示範版本</h2>
-          <p className="mt-1 text-sm text-ink-500">不需註冊或登入。你的操作會儲存在此瀏覽器中。</p>
-          {missingStudent && (
-            <p className="mt-4 rounded-lg bg-warn-50 px-3 py-2 text-sm text-warn-600">原本示範的學員已被刪除，請重新選擇身分。</p>
-          )}
-          <div className="mt-6 space-y-3">
-            <RoleButton
-              icon={ClipboardList}
-              title="以教練身分繼續"
-              text={`${data.coach.name}・管理 ${data.students.length} 位學員`}
-              onClick={() => continueAs('coach')}
-            />
-            <RoleButton
-              icon={UserRound}
-              title="以學員身分繼續"
-              text={demoStudent ? `${demoStudent.name}・查看課表與進步` : '尚無學員'}
-              onClick={() => continueAs('student')}
-            />
-          </div>
-          <p className="mt-6 text-xs leading-relaxed text-ink-500">登入後可隨時從側邊欄或右上角切換身分，也可以重設示範資料。</p>
-          <DemoNotice className="mt-4" />
-        </section>
-        )}
+        <div className="md:col-start-2 md:row-span-2 md:row-start-1 md:self-center">
+          {isApiMode ? <ApiAuthPanel /> : renderDemoPanel()}
+        </div>
+
+        <ul className="grid max-w-lg gap-4 pb-4 sm:grid-cols-2 md:col-start-1 md:row-start-2 md:self-start md:pb-0">
+          {FEATURES.map((f) => (
+            <li key={f.title} className="flex gap-3">
+              <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-accent-700">
+                <f.icon className="size-4" />
+              </span>
+              <div>
+                <p className="text-sm font-medium text-ink-900">{f.title}</p>
+                <p className="mt-0.5 text-[13px] leading-relaxed text-ink-500">{f.text}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   )
+
+  // Offline demo (no backend): pick a role; data lives in this browser.
+  function renderDemoPanel() {
+    return (
+      <section className="rounded-2xl border border-line bg-surface p-6 shadow-[0_1px_2px_rgba(0,0,0,0.03)] md:p-8">
+        <h2 className="text-lg font-semibold text-ink-900">進入示範版本</h2>
+        <p className="mt-1 text-sm text-ink-500">不需註冊或登入。你的操作會儲存在此瀏覽器中。</p>
+        {missingStudent && (
+          <p className="mt-4 rounded-lg bg-warn-50 px-3 py-2 text-sm text-warn-600">原本示範的學員已被刪除，請重新選擇身分。</p>
+        )}
+        <div className="mt-6 space-y-3">
+          <RoleButton
+            icon={ClipboardList}
+            title="以教練身分繼續"
+            text={`${data.coach.name}・管理 ${data.students.length} 位學員`}
+            onClick={() => continueAs('coach')}
+          />
+          <RoleButton
+            icon={UserRound}
+            title="以學員身分繼續"
+            text={demoStudent ? `${demoStudent.name}・查看課表與進步` : '尚無學員'}
+            onClick={() => continueAs('student')}
+          />
+        </div>
+        <p className="mt-6 text-xs leading-relaxed text-ink-500">登入後可隨時從側邊欄或右上角切換身分，也可以重設示範資料。</p>
+        {isLocalDemo && (
+          <button type="button" onClick={exitLocalDemo} className="group mt-5 flex w-full items-center gap-3 border-t border-line pt-4 text-left">
+            <span className="flex-1">
+              <span className="block text-sm font-medium text-ink-900">準備好開始了？</span>
+              <span className="mt-0.5 block text-[13px] text-ink-500">離開示範，登入或註冊正式帳號。</span>
+            </span>
+            <ArrowRight className="size-4 text-ink-400 transition-transform group-hover:translate-x-0.5 group-hover:text-accent-700" />
+          </button>
+        )}
+        <DemoNotice className="mt-4" />
+      </section>
+    )
+  }
 }
 
 function RoleButton({ icon: Icon, title, text, onClick }: { icon: typeof Users; title: string; text: string; onClick: () => void }) {
@@ -149,6 +166,13 @@ function ApiAuthPanel() {
     }
   }
 
+  // Browser-only demo: never touches the server, so it works even when server demo mode is off.
+  const enterDemo = (role: 'coach' | 'student') => {
+    if (!enterLocalDemo({ role, studentId: DEFAULT_DEMO_STUDENT_ID }, role === 'coach' ? '/coach' : '/student')) {
+      setError('此瀏覽器無法儲存示範資料，請關閉無痕模式後再試')
+    }
+  }
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (tab === 'login') void run(() => login(form.email, form.password))
@@ -180,9 +204,9 @@ function ApiAuthPanel() {
 
       {tab === 'demo' ? (
         <div className="mt-5 space-y-3">
-          <RoleButton icon={ClipboardList} title="以示範教練登入" text="林子傑・11 位示範學員" onClick={() => !busy && void run(() => demoLogin('coach'))} />
-          <RoleButton icon={UserRound} title="以示範學員登入" text="陳怡君・查看課表與進步" onClick={() => !busy && void run(() => demoLogin('student'))} />
-          <p className="text-xs leading-relaxed text-ink-500">第一次使用時會自動匯入示範資料。示範帳號密碼皆為 demo1234。</p>
+          <RoleButton icon={ClipboardList} title="以示範教練進入" text="Jason Lin・11 位示範學員" onClick={() => enterDemo('coach')} />
+          <RoleButton icon={UserRound} title="以示範學員進入" text="Emily Chen・查看課表與進步" onClick={() => enterDemo('student')} />
+          <p className="text-xs leading-relaxed text-ink-500">不需要帳號。示範資料只存在這個瀏覽器，可以隨意操作，不會影響任何人。</p>
         </div>
       ) : (
         <form onSubmit={submit} noValidate className="mt-5 space-y-3.5">
