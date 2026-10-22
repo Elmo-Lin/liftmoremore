@@ -1,6 +1,7 @@
 // Domain model for Lift More More.
 // Rules encoded here:
-// - Coach and Student are distinct user roles.
+// - Coach and Student are distinct user roles. A self-tracker ('self') has no coach:
+//   the backend gives them a one-person space where they are the only student.
 // - Workout sessions always belong to exactly one student.
 // - Training plans are coach-authored; workout logs record who created them.
 // - Session balances are NEVER stored; they are derived from a package's
@@ -10,7 +11,7 @@ export type ID = string
 /** ISO 8601 timestamp, e.g. 2026-10-20T09:30:00.000Z */
 export type ISODate = string
 
-export type Role = 'coach' | 'student'
+export type Role = 'coach' | 'student' | 'self'
 
 export interface User {
   id: ID

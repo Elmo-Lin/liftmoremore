@@ -42,6 +42,13 @@ const STUDENT_NAV: NavItem[] = [
   { to: '/student/progress', label: '進步追蹤', short: '進步', icon: TrendingUp },
 ]
 
+const SELF_NAV: NavItem[] = [
+  { to: '/student', label: '首頁', icon: House, end: true },
+  { to: '/student/workouts/new', label: '記錄訓練', short: '訓練', icon: Dumbbell, primary: true },
+  { to: '/student/history', label: '訓練紀錄', short: '紀錄', icon: History },
+  { to: '/student/progress', label: '進步追蹤', short: '進步', icon: TrendingUp },
+]
+
 export function Logo() {
   return (
     <span className="flex items-center gap-2">
@@ -57,7 +64,7 @@ export function Logo() {
 
 export function AppShell() {
   const { session } = useSession()
-  const nav = session?.role === 'student' ? STUDENT_NAV : COACH_NAV
+  const nav = session?.role === 'self' ? SELF_NAV : session?.role === 'student' ? STUDENT_NAV : COACH_NAV
 
   return (
     <div className="min-h-dvh md:flex">
@@ -107,7 +114,7 @@ export function AppShell() {
       {/* Mobile bottom nav */}
       <nav
         aria-label="主要導覽"
-        className="material fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-black/10 pb-[env(safe-area-inset-bottom)] md:hidden"
+        className={`material fixed inset-x-0 bottom-0 z-40 grid ${nav.length === 4 ? 'grid-cols-4' : 'grid-cols-5'} border-t border-black/10 pb-[env(safe-area-inset-bottom)] md:hidden`}
       >
         {nav.map((item) => (
           <NavLink

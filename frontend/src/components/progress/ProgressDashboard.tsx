@@ -10,7 +10,7 @@ import {
   workoutVolume,
 } from '../../lib/stats'
 import { useData } from '../../store/contexts'
-import { selectCompleted, selectStudent, useExerciseMap } from '../../store/selectors'
+import { selectCompleted, selectStudent, useExerciseMap, useIsSelf } from '../../store/selectors'
 import type { ID } from '../../types'
 import { Segmented, ToolbarSelect } from '../ui/Form'
 import { Card, CardHeader, EmptyState, Stat } from '../ui/Primitives'
@@ -29,6 +29,7 @@ const RANGE_OPTIONS: { value: RangeKey; label: string }[] = [
 const PREFERRED = ['ex_squat', 'ex_bench', 'ex_deadlift', 'ex_hipthrust', 'ex_goblet', 'ex_legpress']
 
 export function ProgressDashboard({ studentId, audience }: { studentId: ID; audience: 'coach' | 'student' }) {
+  const isSelf = useIsSelf()
   const { data } = useData()
   const exMap = useExerciseMap()
   const student = selectStudent(data, studentId)
@@ -102,7 +103,7 @@ export function ProgressDashboard({ studentId, audience }: { studentId: ID; audi
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="訓練次數" value={inRange.length} unit="次" sub={`教練課 ${coachedCount}・自主 ${inRange.length - coachedCount}`} />
+        <Stat label="訓練次數" value={inRange.length} unit="次" sub={isSelf ? undefined : `教練課 ${coachedCount}・自主 ${inRange.length - coachedCount}`} />
         <Stat label="總訓練量" value={compactKg(totalVolume)} sub="重量 × 次數，僅計入完成組" />
         <Stat label="平均每週" value={(inRange.length / Math.max(1, buckets.length)).toFixed(1)} unit="次" sub={`目標每週 ${target} 次`} />
         <Stat label="訓練一致性" value={`${consistencyPct}%`} sub={`達到每週 ${target} 次的週數比例`} />
@@ -211,16 +212,18 @@ export function ProgressDashboard({ studentId, audience }: { studentId: ID; audi
             title="訓練頻率"
             description="每週完成的訓練次數"
             action={
-              <Legend
-                items={[
-                  { color: SERIES_1, label: '教練課' },
-                  { color: SERIES_2, label: '自主訓練' },
-                ]}
-              />
+              !isSelf && (
+                <Legend
+                  items={[
+                    { color: SERIES_1, label: '教練課' },
+                    { color: SERIES_2, label: '自主訓練' },
+                  ]}
+                />
+              )
             }
           />
           <div className="px-3 pb-4">
-            <FrequencyChart buckets={buckets} />
+            <FrequencyChart buckets={buckets} byType={!isSelf} />
           </div>
         </Card>
       </div>

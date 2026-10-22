@@ -4,7 +4,7 @@ import { compactKg, durationMin, formatDate, formatTime } from '../../lib/format
 import { deductionFor } from '../../lib/sessions'
 import { completedSets, workoutSetCount, workoutVolume } from '../../lib/stats'
 import { useData, useToast } from '../../store/contexts'
-import { selectStudent, useExerciseMap } from '../../store/selectors'
+import { selectStudent, useExerciseMap, useIsSelf } from '../../store/selectors'
 import type { WorkoutSession } from '../../types'
 import { Button } from '../ui/Button'
 import { TextInput } from '../ui/Form'
@@ -83,6 +83,7 @@ export function WorkoutDetailModal({
   const { data, actions } = useData()
   const notify = useToast()
   const exMap = useExerciseMap()
+  const isSelf = useIsSelf()
   const [deducting, setDeducting] = useState(false)
   const [reversing, setReversing] = useState(false)
   const [reverseReason, setReverseReason] = useState('')
@@ -137,10 +138,10 @@ export function WorkoutDetailModal({
         }
       >
         <div className="mb-4 flex flex-wrap gap-2">
-          <WorkoutTypeBadge workout={current} />
+          {!isSelf && <WorkoutTypeBadge workout={current} />}
           {current.type === 'coached' && <DeductionBadge workout={current} />}
-          {current.type === 'independent' && <Badge>不扣除堂數</Badge>}
-          <Badge>{current.createdBy === 'coach' ? '教練記錄' : '學員記錄'}</Badge>
+          {current.type === 'independent' && !isSelf && <Badge>不扣除堂數</Badge>}
+          {!isSelf && <Badge>{current.createdBy === 'coach' ? '教練記錄' : '學員記錄'}</Badge>}
         </div>
         <div className="mb-4 grid grid-cols-3 gap-2 rounded-xl bg-canvas p-3 text-center">
           <div>

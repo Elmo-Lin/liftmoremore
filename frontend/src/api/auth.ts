@@ -17,6 +17,10 @@ export async function registerCoach(input: { name: string; email: string; passwo
   return toSession(await api<AuthResponse>('POST', '/auth/register', input))
 }
 
+export async function registerSelf(input: { name: string; email: string; password: string }) {
+  return toSession(await api<AuthResponse>('POST', '/auth/register-self', input))
+}
+
 export async function activateInvite(inviteCode: string, password: string) {
   return toSession(await api<AuthResponse>('POST', '/auth/activate', { inviteCode, password }))
 }

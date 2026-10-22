@@ -47,6 +47,10 @@ coaches/{coachId}       coach profile; everything the coach owns is a subcollect
   ledgers/{studentId}   lock token for ledger writes (not a balance)
 ```
 
+- Roles: `coach`, `student` (invited by a coach) and `self` (a self-tracker with no coach).
+  A self-tracker gets `coaches/{id}` as their own one-person space, holding a single
+  `students/{id}` with the same ID, so they reuse the student-scoped rules: they log
+  independent workouts only and cannot bill, plan or manage students.
 - Plans embed their days and prescriptions; workouts embed exercises and sets.
 - Timestamps are native Firestore Timestamps.
 - Queries filter by a single field and sort in memory, so **no composite indexes** are needed.
@@ -123,6 +127,7 @@ All routes are under `/api`, return JSON, and except auth/health/demo need
 | Method | Path | Who | Purpose |
 |---|---|---|---|
 | POST | `/auth/register` | public | Coach sign-up → token |
+| POST | `/auth/register-self` | public | Self-tracker sign-up (no coach) → token |
 | POST | `/auth/login` | public | Email + password → token |
 | POST | `/auth/activate` | public | Student sets password with invite code → token |
 | GET | `/auth/me` | any | Current user |

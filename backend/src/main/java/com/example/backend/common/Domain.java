@@ -9,6 +9,8 @@ public final class Domain {
 
     public static final String COACH = "coach";
     public static final String STUDENT = "student";
+    /** Self-tracker: no coach; owns a one-person space where they are the only student. */
+    public static final String SELF = "self";
 
     public static final Set<String> GOALS = Set.of("strength", "hypertrophy", "fatLoss", "general", "powerlifting", "mobility");
     public static final Set<String> GENDERS = Set.of("female", "male", "other");

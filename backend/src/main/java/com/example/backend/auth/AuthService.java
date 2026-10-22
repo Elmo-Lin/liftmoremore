@@ -14,6 +14,7 @@ import com.example.backend.web.Dtos.AuthResponse;
 import com.example.backend.web.Dtos.LoginInput;
 import com.example.backend.web.Dtos.MeDto;
 import com.example.backend.web.Dtos.RegisterCoachInput;
+import com.example.backend.web.Dtos.RegisterSelfInput;
 import java.time.Instant;
 import java.util.Locale;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -57,6 +58,52 @@ public class AuthService {
             tx.create(emailRef, new EmailOwner(u.id));
             tx.create(db.doc(Db.USERS, u.id), u);
             tx.create(db.doc(Db.COACHES, c.id), c);
+            return null;
+        });
+        return issue(u);
+    }
+
+    /**
+     * A self-tracker gets a one-person space: a coach document they own (the tenant root every
+     * query is scoped by) holding a single student — themselves — with the same ID.
+     */
+    public AuthResponse registerSelf(RegisterSelfInput in) {
+        String email = in.email().trim();
+        Instant now = Instant.now();
+        UserAccount u = new UserAccount();
+        u.id = Ids.newId("self");
+        u.role = Domain.SELF;
+        u.name = in.name().trim();
+        u.email = email;
+        u.coachId = u.id;
+        u.passwordHash = passwords.encode(in.password());
+        u.createdAt = now;
+        Coach space = new Coach();
+        space.id = u.id;
+        space.name = u.name;
+        space.email = email;
+        space.title = "";
+        space.studio = "";
+        space.createdAt = now;
+        Student s = new Student();
+        s.id = u.id;
+        s.coachId = u.id;
+        s.name = u.name;
+        s.email = email;
+        s.goal = "general";
+        s.status = "active";
+        s.weeklyFrequency = 3;
+        s.activated = true;
+        s.joinedAt = now;
+        s.createdAt = now;
+
+        db.transaction(tx -> {
+            var emailRef = db.doc(Db.EMAILS, key(email));
+            if (tx.get(emailRef, EmailOwner.class).isPresent()) throw ApiException.conflict("email_taken", "此 Email 已註冊");
+            tx.create(emailRef, new EmailOwner(u.id));
+            tx.create(db.doc(Db.USERS, u.id), u);
+            tx.create(db.doc(Db.COACHES, space.id), space);
+            tx.create(db.coachDoc(u.id, Db.STUDENTS, s.id), s);
             return null;
         });
         return issue(u);
@@ -111,7 +158,7 @@ public class AuthService {
     }
 
     private static MeDto toMe(UserAccount u) {
-        return new MeDto(u.id, u.role, u.name, u.email, u.coachId, Domain.STUDENT.equals(u.role) ? u.id : null);
+        return new MeDto(u.id, u.role, u.name, u.email, u.coachId, Domain.COACH.equals(u.role) ? null : u.id);
     }
 
     private static String key(String email) {

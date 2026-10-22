@@ -11,7 +11,77 @@ import { Segmented } from '../ui/Form'
 import { ConfirmDialog, Modal } from '../ui/Modal'
 import { Avatar, Badge } from '../ui/Primitives'
 
-export function RoleSwitcher({ placement }: { placement: 'sidebar' | 'topbar' }) {
+type Placement = 'sidebar' | 'topbar'
+
+export function RoleSwitcher({ placement }: { placement: Placement }) {
+  const { session } = useSession()
+  return session?.role === 'self' ? <SelfAccount placement={placement} /> : <DemoRoleSwitcher placement={placement} />
+}
+
+/** Self-trackers have one identity and nothing to switch to: show who is signed in and a sign-out. */
+function SelfAccount({ placement }: { placement: Placement }) {
+  const { data } = useData()
+  const { session, signOut } = useSession()
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const student = data.students.find((s) => s.id === session?.studentId)
+  const name = student?.name ?? session?.name ?? ''
+  const id = student?.id ?? 'x'
+  const logOut = () => {
+    signOut()
+    navigate('/login')
+  }
+
+  if (placement === 'sidebar') {
+    return (
+      <div className="rounded-xl bg-surface p-3 shadow-[0_1px_2px_rgba(0,0,0,0.05),0_0_0_0.5px_rgba(0,0,0,0.05)]">
+        <div className="flex items-center gap-2.5">
+          <Avatar name={name} id={id} size="sm" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-ink-900">{name}</p>
+            <p className="truncate text-xs text-ink-500">{student?.email}</p>
+          </div>
+        </div>
+        <Button variant="secondary" size="sm" icon={LogOut} className="mt-3 w-full" onClick={logOut}>
+          登出
+        </Button>
+      </div>
+    )
+  }
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex h-9 items-center gap-2 rounded-full bg-fill py-1 pr-3 pl-1 text-[13px] font-medium text-ink-800"
+        aria-label="帳號"
+      >
+        <Avatar name={name} id={id} size="sm" />
+        <span className="max-w-24 truncate">{name}</span>
+      </button>
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={name}
+        description={student?.email}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setOpen(false)} className="h-11 md:h-10">
+              取消
+            </Button>
+            <Button icon={LogOut} onClick={logOut} className="h-11 md:h-10">
+              登出
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-600">登出後，下次需要用 Email 和密碼登入。</p>
+      </Modal>
+    </>
+  )
+}
+
+function DemoRoleSwitcher({ placement }: { placement: Placement }) {
   const { data, actions } = useData()
   const { session, signIn, signOut } = useSession()
   const navigate = useNavigate()

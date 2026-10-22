@@ -217,6 +217,11 @@ public final class Dtos {
 
     public record LoginInput(@NotBlank(message = "請輸入 Email") String email, @NotBlank(message = "請輸入密碼") String password) {}
 
+    public record RegisterSelfInput(
+            @NotBlank(message = "請輸入姓名") @Size(max = 30) String name,
+            @NotBlank(message = "請輸入 Email") @Email(message = "Email 格式不正確") String email,
+            @NotBlank @Size(min = 8, max = 72, message = "密碼需為 8–72 字元") String password) {}
+
     public record ActivateInput(
             @NotBlank(message = "請輸入邀請碼") String inviteCode,
             @NotBlank @Size(min = 8, max = 72, message = "密碼需為 8–72 字元") String password) {}

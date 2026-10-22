@@ -4,7 +4,7 @@ import { Link } from 'react-router'
 import { ButtonLink } from '../../components/ui/Button'
 import { Avatar, Badge, Card, CardHeader, DemoNotice, EmptyState, PageHeader, Stat } from '../../components/ui/Primitives'
 import { WorkoutDetailModal, WorkoutRow } from '../../components/workout/WorkoutDetail'
-import { formatDate, formatTime, isSameDay, relativeDay } from '../../lib/format'
+import { formatDate, formatTime, givenName, isSameDay, relativeDay } from '../../lib/format'
 import { LOW_BALANCE_THRESHOLD } from '../../lib/sessions'
 import { nextTrainingDay, workoutDate } from '../../lib/stats'
 import { useData } from '../../store/contexts'
@@ -43,7 +43,7 @@ export function CoachDashboardPage() {
   return (
     <div>
       <PageHeader
-        title={`${greeting(now)}，${data.coach.name.slice(-2)}`}
+        title={`${greeting(now)}，${givenName(data.coach.name)}`}
         description={`${formatDate(now, { year: true, weekday: true })}・今天有 ${todays.length} 堂課`}
         actions={
           <>

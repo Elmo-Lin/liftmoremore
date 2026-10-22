@@ -16,7 +16,7 @@ import { uid } from '../../lib/id'
 import { LOW_BALANCE_THRESHOLD } from '../../lib/sessions'
 import { lastExerciseLog, workoutDate } from '../../lib/stats'
 import { useData, useToast } from '../../store/contexts'
-import { selectBalance, selectCompleted, selectDrafts, selectPlan, selectStudent, useExerciseMap } from '../../store/selectors'
+import { selectBalance, selectCompleted, selectDrafts, selectPlan, selectStudent, useExerciseMap, useIsSelf } from '../../store/selectors'
 import type { ExerciseLog, ExercisePrescription, ID, Role, TrainingDay, TrainingPlan, WorkoutSession } from '../../types'
 import { Button } from '../ui/Button'
 import { inputClass, SelectInput, TextArea } from '../ui/Form'
@@ -70,12 +70,13 @@ function useNow(intervalMs: number) {
   return now
 }
 
-export function WorkoutLogger({ mode, fixedStudentId }: { mode: Role; fixedStudentId?: ID }) {
+export function WorkoutLogger({ mode, fixedStudentId }: { mode: Exclude<Role, 'self'>; fixedStudentId?: ID }) {
   const { data, actions } = useData()
   const notify = useToast()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const exMap = useExerciseMap()
+  const isSelf = useIsSelf()
 
   const [studentId, setStudentId] = useState<ID>(() => {
     if (fixedStudentId) return fixedStudentId
@@ -194,7 +195,7 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: Role; fixedStude
     if (mode === 'coach') {
       setDeductWorkout(res.value)
     } else {
-      notify('自主訓練已儲存（不會扣除教練課堂數）')
+      notify(isSelf ? '訓練已儲存' : '自主訓練已儲存（不會扣除教練課堂數）')
       navigate('/student/history')
     }
   }
@@ -312,7 +313,7 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: Role; fixedStude
                 </div>
               ) : (
                 <p className="rounded-lg bg-canvas px-3 py-2.5 text-[13px] text-ink-500">
-                  {mode === 'coach' ? '此學員尚未指派課表，可從空白開始或到「訓練課表」指派。' : '教練尚未指派課表給你，可以從空白開始記錄。'}
+                  {mode === 'coach' ? '此學員尚未指派課表，可從空白開始或到「訓練課表」指派。' : isSelf ? '從上次訓練或空白開始記錄。' : '教練尚未指派課表給你，可以從空白開始記錄。'}
                 </p>
               )}
 
@@ -372,7 +373,7 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: Role; fixedStude
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm text-ink-500">{student?.name}</p>
-              {workout.type === 'coached' ? <Badge tone="accent">教練課</Badge> : <Badge tone="alt">自主訓練</Badge>}
+              {workout.type === 'coached' ? <Badge tone="accent">教練課</Badge> : !isSelf && <Badge tone="alt">自主訓練</Badge>}
             </div>
             <input
               value={workout.title}

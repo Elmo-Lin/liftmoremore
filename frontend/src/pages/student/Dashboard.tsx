@@ -4,16 +4,17 @@ import { Link } from 'react-router'
 import { ButtonLink } from '../../components/ui/Button'
 import { BalanceMeter, Card, CardHeader, DemoNotice, EmptyState, PageHeader } from '../../components/ui/Primitives'
 import { WorkoutDetailModal, WorkoutRow } from '../../components/workout/WorkoutDetail'
-import { addDays, formatDate, formatTime, relativeDay } from '../../lib/format'
+import { addDays, formatDate, formatTime, givenName, relativeDay } from '../../lib/format'
 import { LOW_BALANCE_THRESHOLD } from '../../lib/sessions'
 import { nextTrainingDay, recentPRs, weekStreak, workoutDate } from '../../lib/stats'
 import { useData } from '../../store/contexts'
-import { selectBalance, selectCompleted, selectDrafts, selectNextAppointment, selectPlan, useCurrentStudent, useExerciseMap } from '../../store/selectors'
+import { selectBalance, selectCompleted, selectDrafts, selectNextAppointment, selectPlan, useCurrentStudent, useExerciseMap, useIsSelf } from '../../store/selectors'
 import type { WorkoutSession } from '../../types'
 
 export function StudentDashboardPage() {
   const { data } = useData()
   const student = useCurrentStudent()!
+  const isSelf = useIsSelf()
   const exMap = useExerciseMap()
   const [open, setOpen] = useState<WorkoutSession | null>(null)
 
@@ -35,11 +36,11 @@ export function StudentDashboardPage() {
   return (
     <div>
       <PageHeader
-        title={`嗨，${student.name.slice(-2)}`}
+        title={`嗨，${givenName(student.name)}`}
         description={workouts[0] ? `上次訓練是${relativeDay(workoutDate(workouts[0]))}，這個月已完成 ${thisMonth} 次訓練。` : '歡迎！完成第一次訓練後，這裡會顯示你的進度。'}
         actions={
           <ButtonLink to="/student/workouts/new" icon={Dumbbell} variant="accent">
-            記錄自主訓練
+            {isSelf ? '記錄訓練' : '記錄自主訓練'}
           </ButtonLink>
         }
       />
@@ -50,12 +51,26 @@ export function StudentDashboardPage() {
           className="mb-4 flex items-center gap-3 rounded-lg border border-line border-l-2 border-l-warn-600 bg-surface px-4 py-2.5 text-sm text-ink-700 hover:bg-raised"
         >
           <Dumbbell className="size-4 shrink-0 text-warn-600" />
-          <span className="flex-1">你有一筆未完成的自主訓練：{draft.title}</span>
+          <span className="flex-1">你有一筆未完成的{isSelf ? '訓練' : '自主訓練'}：{draft.title}</span>
           <span className="font-medium text-ink-900">繼續</span>
         </Link>
       )}
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className={`grid gap-3 ${isSelf ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
+        {isSelf ? (
+          <Card className="p-5">
+            <div className="flex items-center justify-between text-[13px] text-ink-500">
+              本月訓練
+              <CalendarDays className="size-4 text-ink-300" />
+            </div>
+            <p className="num mt-2 text-[28px] text-ink-900">
+              {thisMonth}
+              <span className="ml-1 text-sm font-normal text-ink-500">次</span>
+            </p>
+            <p className="mt-2 text-xs text-ink-500">共完成 {workouts.length} 次訓練</p>
+          </Card>
+        ) : (
+        <>
         <Card className="p-5">
           <div className="flex items-center justify-between text-[13px] text-ink-500">
             下次教練課
@@ -90,6 +105,8 @@ export function StudentDashboardPage() {
           )}
           <p className="mt-2 text-xs text-ink-500">自主訓練不會扣除堂數{balance.remaining <= LOW_BALANCE_THRESHOLD ? '・堂數不多了，可與教練討論續約' : ''}</p>
         </Card>
+        </>
+        )}
         <Card className="p-5">
           <div className="flex items-center justify-between text-[13px] text-ink-500">
             連續訓練
@@ -103,7 +120,8 @@ export function StudentDashboardPage() {
         </Card>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+      <div className={`mt-4 grid gap-4 ${isSelf ? '' : 'lg:grid-cols-[1.3fr_1fr]'}`}>
+        {!isSelf && (
         <Card>
           <CardHeader
             title="我的課表"
@@ -131,6 +149,7 @@ export function StudentDashboardPage() {
             <EmptyState compact icon={ClipboardList} title="教練尚未指派課表" description="你仍可以從空白開始記錄自主訓練。" />
           )}
         </Card>
+        )}
 
         <Card>
           <CardHeader title="近期進步" description="近 4 週實際完成的新最重紀錄" />

@@ -3,11 +3,12 @@ import { Badge, BalanceMeter, Card, CardHeader, DemoNotice, PageHeader } from '.
 import { formatDate } from '../../lib/format'
 import { LOW_BALANCE_THRESHOLD } from '../../lib/sessions'
 import { useData } from '../../store/contexts'
-import { selectBalance, useCurrentStudent } from '../../store/selectors'
+import { selectBalance, useCurrentStudent, useIsSelf } from '../../store/selectors'
 
 export function StudentProgressPage() {
   const { data } = useData()
   const student = useCurrentStudent()!
+  const isSelf = useIsSelf()
   const balance = selectBalance(data, student.id)
 
   return (
@@ -15,6 +16,7 @@ export function StudentProgressPage() {
       <PageHeader title="進步追蹤" description="所有數值都來自你實際完成的組數" />
       <ProgressDashboard studentId={student.id} audience="student" />
 
+      {!isSelf && (
       <Card className="mt-4">
         <CardHeader title="教練課堂數" description="只有教練課會扣除堂數，自主訓練不會" />
         <div className="grid gap-4 px-5 pb-5 sm:grid-cols-[200px_1fr]">
@@ -47,6 +49,7 @@ export function StudentProgressPage() {
           </ul>
         </div>
       </Card>
+      )}
       <DemoNotice className="mt-6" />
     </div>
   )

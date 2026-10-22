@@ -7,6 +7,7 @@ import com.example.backend.web.Dtos.AuthResponse;
 import com.example.backend.web.Dtos.LoginInput;
 import com.example.backend.web.Dtos.MeDto;
 import com.example.backend.web.Dtos.RegisterCoachInput;
+import com.example.backend.web.Dtos.RegisterSelfInput;
 import jakarta.validation.Valid;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -37,6 +38,13 @@ public class AuthController {
     @ResponseStatus(HttpStatus.CREATED)
     public AuthResponse register(@Valid @RequestBody RegisterCoachInput in) {
         return auth.registerCoach(in);
+    }
+
+    /** Self-tracker registration: logs their own training without a coach. */
+    @PostMapping("/auth/register-self")
+    @ResponseStatus(HttpStatus.CREATED)
+    public AuthResponse registerSelf(@Valid @RequestBody RegisterSelfInput in) {
+        return auth.registerSelf(in);
     }
 
     @PostMapping("/auth/login")

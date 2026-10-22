@@ -230,6 +230,32 @@ class ApiIntegrationTests {
     }
 
     @Test
+    void selfTrackerLogsOwnTrainingInIsolatedSpace() throws Exception {
+        Resp reg = call(post("/api/auth/register-self"), null, Map.of("name", "自主訓練者", "email", "self-" + suffix + "@example.com", "password", "password123"));
+        assertThat(reg.status()).isEqualTo(201);
+        String self = reg.body().get("token").asString();
+        String sid = reg.body().get("user").get("studentId").asString();
+        assertThat(reg.body().get("user").get("role").asString()).isEqualTo("self");
+        assertThat(sid).isEqualTo(reg.body().get("user").get("userId").asString());
+
+        JsonNode boot = call(get("/api/bootstrap"), self, null).body();
+        assertThat(boot.get("students").size()).isEqualTo(1);
+        assertThat(boot.get("students").get(0).get("id").asString()).isEqualTo(sid);
+
+        assertThat(call(put("/api/workouts/wo_self1" + suffix), self, workout(sid, "independent", "completed")).status()).isEqualTo(200);
+        assertThat(call(put("/api/workouts/wo_self2" + suffix), self, workout(sid, "coached", "completed")).status())
+                .as("no coach, so no coached sessions").isEqualTo(403);
+        assertThat(call(post("/api/students"), self, Map.of()).status()).isIn(400, 403);
+        assertThat(call(get("/api/plans"), self, null).body().size()).isZero();
+
+        String other = createStudent(coach, "jay");
+        assertThat(call(get("/api/students/" + other), self, null).status()).as("cannot reach a coach's students").isEqualTo(404);
+        assertThat(call(get("/api/students/" + sid), coach, null).status()).as("coach cannot reach a self-tracker").isEqualTo(404);
+        assertThat(call(post("/api/auth/register-self"), null, Map.of("name", "X", "email", "SELF-" + suffix + "@example.com", "password", "password123")).status())
+                .isEqualTo(409);
+    }
+
+    @Test
     void plansAreCoachAuthoredAndAssignable() throws Exception {
         String sid = createStudent(coach, "hal");
         Map<String, Object> plan = Map.of("name", "肌力 5x5", "goal", "strength", "description", "",

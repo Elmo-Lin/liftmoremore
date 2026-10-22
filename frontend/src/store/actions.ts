@@ -190,7 +190,7 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
         return fail('已扣堂的課程無法更換學員')
       const role = actor()
       // Students can only log independent workouts for themselves.
-      if (role === 'student' && workout.type !== 'independent') return fail('學員只能記錄自主訓練')
+      if (role !== 'coach' && workout.type !== 'independent') return fail('學員只能記錄自主訓練')
       if (workout.status === 'completed') {
         const hasSet = workout.exercises.some((e) => e.sets.some((s) => s.completed))
         if (!hasSet) return fail('請至少完成一組再結束訓練')

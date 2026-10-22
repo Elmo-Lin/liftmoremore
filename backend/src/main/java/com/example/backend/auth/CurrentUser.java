@@ -5,8 +5,8 @@ import com.example.backend.common.Domain;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 /**
- * The authenticated caller. {@code coachId} is the coach's own ID for coaches, and the
- * owning coach's ID for students — every query is scoped by it.
+ * The authenticated caller. {@code coachId} is the coach's own ID for coaches, the owning
+ * coach's ID for students, and the user's own ID for self-trackers — every query is scoped by it.
  */
 public record CurrentUser(String userId, String role, String coachId) {
 
@@ -18,8 +18,13 @@ public record CurrentUser(String userId, String role, String coachId) {
         return Domain.COACH.equals(role);
     }
 
+    /** Students and self-trackers: may only see and log their own data, never bill or manage others. */
     public boolean isStudent() {
-        return Domain.STUDENT.equals(role);
+        return Domain.STUDENT.equals(role) || isSelf();
+    }
+
+    public boolean isSelf() {
+        return Domain.SELF.equals(role);
     }
 
     public CurrentUser requireCoach() {

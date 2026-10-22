@@ -20,12 +20,13 @@ const StudentPlanPage = lazy(() => import('./pages/student/Plan').then((m) => ({
 const StudentProgressPage = lazy(() => import('./pages/student/Progress').then((m) => ({ default: m.StudentProgressPage })))
 const StudentWorkoutPage = lazy(() => import('./pages/student/Workout').then((m) => ({ default: m.StudentWorkoutPage })))
 
-function RequireRole({ role, children }: { role: Role; children: ReactNode }) {
+function RequireRole({ role, children }: { role: Exclude<Role, 'self'>; children: ReactNode }) {
   const { session } = useSession()
   const { data } = useData()
   const location = useLocation()
   if (!session) return <Navigate to="/login" replace state={{ from: location.pathname }} />
-  if (session.role !== role) return <Navigate to={session.role === 'coach' ? '/coach' : '/student'} replace />
+  // Self-trackers share the student area.
+  if ((session.role === 'coach' ? 'coach' : 'student') !== role) return <Navigate to={session.role === 'coach' ? '/coach' : '/student'} replace />
   if (role === 'student' && !data.students.some((s) => s.id === session.studentId)) {
     return <Navigate to="/login" replace state={{ missingStudent: true }} />
   }

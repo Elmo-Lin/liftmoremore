@@ -109,6 +109,13 @@ export const EQUIPMENT_LABEL: Record<Equipment, string> = {
   bodyweight: '自體重',
 }
 
+export function givenName(name: string) {
+  // Chinese names: last 2 chars (林子傑 → 子傑); latin: first word (Elmo Lin → Elmo).
+  const trimmed = name.trim()
+  if (/[一-鿿]/.test(trimmed)) return trimmed.slice(-2)
+  return trimmed.split(/\s+/)[0]
+}
+
 export function initials(name: string) {
   // Chinese names: use the given name (last 1-2 chars); latin: first letters.
   if (/[一-鿿]/.test(name)) return name.slice(-2)

@@ -141,7 +141,8 @@ export function WeeklyVolumeChart({ buckets }: { buckets: WeekBucket[] }) {
   )
 }
 
-export function FrequencyChart({ buckets }: { buckets: WeekBucket[] }) {
+/** `byType` splits each week into coached vs independent; off for self-trackers, who only log their own. */
+export function FrequencyChart({ buckets, byType = true }: { buckets: WeekBucket[]; byType?: boolean }) {
   return (
     <div className="h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -154,10 +155,14 @@ export function FrequencyChart({ buckets }: { buckets: WeekBucket[] }) {
             content={tip<WeekBucket>((r) => (
                 <TooltipBox
                   title={`${r.label} 當週`}
-                  rows={[
-                    { color: SERIES_1, label: '教練課', value: `${r.coached} 次` },
-                    { color: SERIES_2, label: '自主訓練', value: `${r.independent} 次` },
-                  ]}
+                  rows={
+                    byType
+                      ? [
+                          { color: SERIES_1, label: '教練課', value: `${r.coached} 次` },
+                          { color: SERIES_2, label: '自主訓練', value: `${r.independent} 次` },
+                        ]
+                      : [{ color: SERIES_2, label: '訓練', value: `${r.coached + r.independent} 次` }]
+                  }
                 />
             ))}
           />

@@ -1,7 +1,7 @@
 import { ArrowRight, ChartLine, ClipboardList, Dumbbell, Ticket, UserRound, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { activateInvite, demoLogin, login, registerCoach } from '../api/auth'
+import { activateInvite, demoLogin, login, registerCoach, registerSelf } from '../api/auth'
 import { isApiMode } from '../api/client'
 import { Logo } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
@@ -119,12 +119,13 @@ function RoleButton({ icon: Icon, title, text, onClick }: { icon: typeof Users; 
 
 type AuthTab = 'demo' | 'login' | 'register' | 'invite'
 
-/** Backend-connected sign-in: demo accounts, email/password, coach sign-up, student invite. */
+/** Backend-connected sign-in: demo accounts, email/password, sign-up (self-tracker or coach), student invite. */
 function ApiAuthPanel() {
   const { signIn } = useSession()
   const navigate = useNavigate()
   const notify = useToast()
   const [tab, setTab] = useState<AuthTab>('demo')
+  const [accountType, setAccountType] = useState<'self' | 'coach'>('self')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({ name: '', email: '', password: '', studio: '', code: '' })
@@ -151,7 +152,8 @@ function ApiAuthPanel() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (tab === 'login') void run(() => login(form.email, form.password))
-    if (tab === 'register') void run(() => registerCoach({ name: form.name, email: form.email, password: form.password, studio: form.studio }))
+    if (tab === 'register' && accountType === 'self') void run(() => registerSelf({ name: form.name, email: form.email, password: form.password }))
+    if (tab === 'register' && accountType === 'coach') void run(() => registerCoach({ name: form.name, email: form.email, password: form.password, studio: form.studio }))
     if (tab === 'invite') void run(() => activateInvite(form.code, form.password))
   }
 
@@ -170,7 +172,7 @@ function ApiAuthPanel() {
           options={[
             { value: 'demo', label: '示範' },
             { value: 'login', label: '登入' },
-            { value: 'register', label: '註冊教練' },
+            { value: 'register', label: '註冊' },
             { value: 'invite', label: '邀請碼' },
           ]}
         />
@@ -184,7 +186,29 @@ function ApiAuthPanel() {
         </div>
       ) : (
         <form onSubmit={submit} noValidate className="mt-5 space-y-3.5">
-          {tab === 'register' && <TextInput label="姓名" value={form.name} onChange={set('name')} autoComplete="name" />}
+          {tab === 'register' && (
+            <>
+              <div>
+                <p className="mb-2 text-[13px] font-medium text-ink-700">帳號類型</p>
+                <Segmented
+                  label="帳號類型"
+                  value={accountType}
+                  onChange={(t) => {
+                    setAccountType(t)
+                    setError(null)
+                  }}
+                  options={[
+                    { value: 'self', label: '自主訓練' },
+                    { value: 'coach', label: '教練' },
+                  ]}
+                />
+                <p className="mt-1.5 text-xs text-ink-500">
+                  {accountType === 'self' ? '自己記錄訓練、追蹤進步，不需要教練。' : '管理學員、課表與堂數。學員請向教練索取邀請碼。'}
+                </p>
+              </div>
+              <TextInput label="姓名" value={form.name} onChange={set('name')} autoComplete="name" />
+            </>
+          )}
           {tab === 'invite' ? (
             <TextInput label="邀請碼" value={form.code} onChange={set('code')} placeholder="教練提供的 8 碼邀請碼" autoCapitalize="characters" />
           ) : (
@@ -198,9 +222,9 @@ function ApiAuthPanel() {
             autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
             hint={tab === 'login' ? undefined : '至少 8 個字元'}
           />
-          {tab === 'register' && <TextInput label="工作室名稱（選填）" value={form.studio} onChange={set('studio')} />}
+          {tab === 'register' && accountType === 'coach' && <TextInput label="工作室名稱（選填）" value={form.studio} onChange={set('studio')} />}
           <Button type="submit" size="lg" className="w-full" disabled={busy}>
-            {busy ? '處理中…' : tab === 'login' ? '登入' : tab === 'register' ? '建立教練帳號' : '啟用學員帳號'}
+            {busy ? '處理中…' : tab === 'login' ? '登入' : tab === 'register' ? (accountType === 'self' ? '建立帳號' : '建立教練帳號') : '啟用學員帳號'}
           </Button>
         </form>
       )}

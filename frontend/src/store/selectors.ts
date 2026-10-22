@@ -23,9 +23,14 @@ export function useExerciseMap() {
   return useMemo(() => new Map<ID, Exercise>(data.exercises.map((e) => [e.id, e])), [data.exercises])
 }
 
-/** The student the demo is currently signed in as (student role only). */
+/** The student the demo is currently signed in as (student and self-tracker roles). */
 export function useCurrentStudent() {
   const { data } = useData()
   const { session } = useSession()
-  return session?.role === 'student' ? selectStudent(data, session.studentId) : undefined
+  return session && session.role !== 'coach' ? selectStudent(data, session.studentId) : undefined
+}
+
+/** Self-trackers have no coach: hide coached sessions, session balances and assigned plans. */
+export function useIsSelf() {
+  return useSession().session?.role === 'self'
 }

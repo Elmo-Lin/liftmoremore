@@ -6,7 +6,7 @@ import { WorkoutDetailModal, WorkoutRow } from '../../components/workout/Workout
 import { addDays, formatDate } from '../../lib/format'
 import { completedSets, exerciseSeries, workoutDate } from '../../lib/stats'
 import { useData } from '../../store/contexts'
-import { selectCompleted, useCurrentStudent, useExerciseMap } from '../../store/selectors'
+import { selectCompleted, useCurrentStudent, useExerciseMap, useIsSelf } from '../../store/selectors'
 import type { ID, WorkoutSession } from '../../types'
 
 type TypeFilter = 'all' | 'coached' | 'independent'
@@ -15,6 +15,7 @@ type DateFilter = '30' | '90' | 'all'
 export function StudentHistoryPage() {
   const { data } = useData()
   const student = useCurrentStudent()!
+  const isSelf = useIsSelf()
   const [view, setView] = useState<'workouts' | 'exercises'>('workouts')
   const [type, setType] = useState<TypeFilter>('all')
   const [range, setRange] = useState<DateFilter>('90')
@@ -37,7 +38,14 @@ export function StudentHistoryPage() {
 
   return (
     <div>
-      <PageHeader title="訓練紀錄" description={`共 ${all.length} 次訓練・教練課 ${all.filter((w) => w.type === 'coached').length} 次・自主訓練 ${all.filter((w) => w.type === 'independent').length} 次`} />
+      <PageHeader
+        title="訓練紀錄"
+        description={
+          isSelf
+            ? `共 ${all.length} 次訓練`
+            : `共 ${all.length} 次訓練・教練課 ${all.filter((w) => w.type === 'coached').length} 次・自主訓練 ${all.filter((w) => w.type === 'independent').length} 次`
+        }
+      />
       <Tabs
         value={view}
         onChange={setView}
@@ -50,16 +58,18 @@ export function StudentHistoryPage() {
         {view === 'workouts' ? (
           <>
             <div className="mb-4 flex flex-wrap items-center gap-2">
-              <Segmented
-                label="類型"
-                value={type}
-                onChange={setType}
-                options={[
-                  { value: 'all', label: '全部' },
-                  { value: 'coached', label: '教練課' },
-                  { value: 'independent', label: '自主訓練' },
-                ]}
-              />
+              {!isSelf && (
+                <Segmented
+                  label="類型"
+                  value={type}
+                  onChange={setType}
+                  options={[
+                    { value: 'all', label: '全部' },
+                    { value: 'coached', label: '教練課' },
+                    { value: 'independent', label: '自主訓練' },
+                  ]}
+                />
+              )}
               <Segmented
                 label="期間"
                 value={range}
@@ -103,6 +113,7 @@ export function StudentHistoryPage() {
 
 function ExerciseHistory({ workouts }: { workouts: WorkoutSession[] }) {
   const exMap = useExerciseMap()
+  const isSelf = useIsSelf()
   const options = useMemo(() => {
     const counts = new Map<ID, number>()
     for (const w of workouts) for (const e of w.exercises) counts.set(e.exerciseId, (counts.get(e.exerciseId) ?? 0) + 1)
@@ -135,7 +146,7 @@ function ExerciseHistory({ workouts }: { workouts: WorkoutSession[] }) {
                 <p className="text-sm font-medium text-ink-900">
                   {formatDate(p.date, { year: true, weekday: true })}
                   <span className="ml-2 text-xs font-normal text-ink-500">
-                    {w.title}・{w.type === 'coached' ? '教練課' : '自主訓練'}
+                    {w.title}{isSelf ? '' : `・${w.type === 'coached' ? '教練課' : '自主訓練'}`}
                   </span>
                 </p>
                 <p className="tabular text-sm text-ink-700">最重 {p.topWeight} kg</p>
