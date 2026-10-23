@@ -90,7 +90,15 @@ export function HomePage() {
           <p className="mt-2 text-sm text-ink-600">
             所有方案皆可免費試用 {TRIAL_DAYS} 天，不需信用卡。價格皆為新台幣、按月計費，透過藍新金流信用卡自動扣款。
           </p>
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
+          {/* Same card for every plan, cheapest first; the buttons line up at the bottom. */}
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            <PlanCard
+              name={PLANS.self.name}
+              price={PLANS.self.price}
+              who="沒有教練、自己練的人"
+              includes={['記錄自己的訓練：動作、重量、次數、RPE', '重量、訓練量與體重的進步追蹤', '為手機設計，記錄一組只要幾次點擊']}
+              addons={['無加購項目，一個人使用']}
+            />
             <PlanCard
               name={PLANS.pro.name}
               price={PLANS.pro.price}
@@ -109,18 +117,6 @@ export function HomePage() {
               ]}
               addons={[`額外教練名額：每增加 1 位 +${twd(COACH_SEAT_PRICE)} / 月`, `額外學員名額：每增加 ${STUDENT_PACK.size} 位 +${twd(STUDENT_PACK.price)} / 月`]}
             />
-          </div>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-surface p-5">
-            <div>
-              <p className="font-semibold text-ink-900">
-                {PLANS.self.name}・{twd(PLANS.self.price)}
-                <span className="font-normal text-ink-500"> / 月</span>
-              </p>
-              <p className="mt-0.5 text-sm text-ink-600">沒有教練，自己記錄訓練、追蹤重量與體重的進步。</p>
-            </div>
-            <ButtonLink to="/login?tab=register" variant="secondary">
-              免費試用 {TRIAL_DAYS} 天
-            </ButtonLink>
           </div>
           <div className="mt-6 rounded-2xl bg-surface p-5">
             <p className="text-sm font-medium text-ink-900">計費方式</p>
@@ -190,17 +186,20 @@ function PlanCard({ name, price, who, includes, addons }: { name: string; price:
           </li>
         ))}
       </ul>
-      <div className="mt-4 border-t border-line pt-4">
-        <p className="text-[13px] font-medium text-ink-700">加購</p>
-        <ul className="mt-1.5 space-y-1 text-[13px] text-ink-600">
-          {addons.map((t) => (
-            <li key={t}>{t}</li>
-          ))}
-        </ul>
+      <div className="mt-auto pt-4">
+        <div className="border-t border-line pt-4">
+          <p className="text-[13px] font-medium text-ink-700">加購</p>
+          {/* Room for two lines (Team has two), so the dividers line up across the cards. */}
+          <ul className="mt-1.5 min-h-11 space-y-1 text-[13px] text-ink-600">
+            {addons.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+        </div>
+        <ButtonLink to="/login?tab=register" className="mt-6 h-11 w-full md:h-10">
+          免費試用 {TRIAL_DAYS} 天
+        </ButtonLink>
       </div>
-      <ButtonLink to="/login?tab=register" className="mt-6 h-11 md:h-10">
-        免費試用 {TRIAL_DAYS} 天
-      </ButtonLink>
     </div>
   )
 }
