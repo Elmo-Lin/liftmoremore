@@ -18,11 +18,13 @@ import com.example.backend.service.StudentService.EmailOwner;
 import com.example.backend.store.Db;
 import com.example.backend.web.Dtos.AppDataDto;
 import com.example.backend.web.Dtos.AppointmentDto;
+import com.example.backend.web.Dtos.CoachMemberDto;
 import com.example.backend.web.Dtos.ExerciseDto;
 import com.example.backend.web.Dtos.ExerciseLogDto;
 import com.example.backend.web.Dtos.MetricDto;
 import com.example.backend.web.Dtos.PackageDto;
 import com.example.backend.web.Dtos.PlanDto;
+import com.example.backend.web.Dtos.RelationshipDto;
 import com.example.backend.web.Dtos.StudentDto;
 import com.example.backend.web.Dtos.TrainingDayDto;
 import com.example.backend.web.Dtos.TransactionDto;
@@ -30,7 +32,9 @@ import com.example.backend.web.Dtos.WorkoutDto;
 import com.google.cloud.firestore.BulkWriter;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -78,13 +82,27 @@ public class DemoService {
         coach.title = data.coach().title();
         coach.studio = data.coach().studio();
         coach.createdAt = data.coach().createdAt();
+        boolean studio = data.studio() != null && Domain.SPACE_STUDIO.equals(data.studio().kind());
+        if (studio) {
+            coach.kind = Domain.SPACE_STUDIO;
+            coach.maxCoaches = data.studio().maxCoaches() != null ? data.studio().maxCoaches() : Domain.DEFAULT_STUDIO_SEATS;
+        }
         w.set(db.doc(Db.COACHES, coachId), db.encode(coach));
-        account(w, coachId, Domain.COACH, coach.name, coach.email, coach.phone, coach.createdAt, coachId, hash);
+        account(w, coachId, studio ? Domain.OWNER : Domain.COACH, coach.name, coach.email, coach.phone, coach.createdAt, coachId, hash);
+        if (studio) {
+            for (CoachMemberDto m : data.studio().coaches()) {
+                if (!m.id().equals(coachId)) account(w, m.id(), Domain.COACH, m.name(), m.email(), null, m.createdAt(), coachId, hash);
+            }
+        }
+        // Which coach teaches each student (the owner when not stated).
+        Map<String, String> teacher = new HashMap<>();
+        for (RelationshipDto r : data.relationships()) if (!coachId.equals(r.coachId())) teacher.put(r.studentId(), r.coachId());
 
         for (StudentDto s : data.students()) {
             Student st = new Student();
             st.id = s.id();
             st.coachId = coachId;
+            st.assignedCoachId = teacher.get(s.id());
             st.name = s.name();
             st.email = s.email();
             st.phone = s.phone();

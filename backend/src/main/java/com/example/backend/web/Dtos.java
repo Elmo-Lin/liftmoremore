@@ -155,7 +155,37 @@ public final class Dtos {
             List<PackageDto> packages,
             List<TransactionDto> transactions,
             List<MetricDto> metrics,
-            List<AppointmentDto> appointments) {}
+            List<AppointmentDto> appointments,
+            /** Coaches only: the workspace and its coaches. */
+            StudioDto studio) {}
+
+    /** A coach in a workspace. status: active, invited (has not set a password yet) or inactive. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record CoachMemberDto(String id, String role, String name, String email, String title, String status, String inviteCode, Instant createdAt) {}
+
+    /** kind: solo (a free coach), studio, or self. maxCoaches counts the owner. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record StudioDto(String id, String kind, String name, String ownerId, Integer maxCoaches, List<CoachMemberDto> coaches) {}
+
+    public record RegisterStudioInput(
+            @NotBlank(message = "請輸入姓名") @Size(max = 30) String name,
+            @NotBlank(message = "請輸入 Email") @Email(message = "Email 格式不正確") String email,
+            @NotBlank @Size(min = 8, max = 72, message = "密碼需為 8–72 字元") String password,
+            @NotBlank(message = "請輸入工作室名稱") @Size(max = 120) String studio) {}
+
+    public record UpgradeStudioInput(@NotBlank(message = "請輸入工作室名稱") @Size(max = 120) String studio) {}
+
+    public record InviteCoachInput(
+            @NotBlank(message = "請輸入姓名") @Size(max = 30) String name,
+            @NotBlank(message = "請輸入 Email") @Email(message = "Email 格式不正確") String email,
+            @Size(max = 60) String title) {}
+
+    public record CoachInviteDto(CoachMemberDto coach, String inviteCode, Instant expiresAt) {}
+
+    /** Where the coach's students go; required when they have any. */
+    public record DeactivateCoachInput(String transferTo) {}
+
+    public record TransferStudentInput(@NotBlank(message = "請選擇教練") String coachId) {}
 
     public record PackageBalanceDto(String packageId, int total, int used, int adjusted, int remaining) {}
 
@@ -169,6 +199,8 @@ public final class Dtos {
 
     public record StudentInput(
             String id,
+            /** Studio owner only: the coach responsible for a new student (defaults to the caller). */
+            String coachId,
             @NotBlank(message = "請輸入姓名") @Size(max = 30, message = "姓名最多 30 字") String name,
             @NotBlank(message = "請輸入 Email") @Email(message = "Email 格式不正確") @Size(max = 120) String email,
             @Pattern(regexp = "^$|^[0-9+\\-\\s()]{8,15}$", message = "電話格式不正確") String phone,

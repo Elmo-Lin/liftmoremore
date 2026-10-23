@@ -29,8 +29,8 @@ import { WorkoutDetailModal, WorkoutRow } from '../../components/workout/Workout
 import { formatDate, formatTime, GENDER_LABEL, GOAL_LABEL, relativeDay } from '../../lib/format'
 import { deductionFor, LOW_BALANCE_THRESHOLD } from '../../lib/sessions'
 import { nextTrainingDay, personalRecords, weeklyBuckets, workoutDate } from '../../lib/stats'
-import { useData, useToast } from '../../store/contexts'
-import { selectBalance, selectCompleted, selectNextAppointment, selectPlan, selectStudent } from '../../store/selectors'
+import { useData, useSession, useToast } from '../../store/contexts'
+import { selectBalance, selectCoachName, selectCoachOf, selectCompleted, selectNextAppointment, selectPlan, selectStudent } from '../../store/selectors'
 import type { Student, WorkoutSession } from '../../types'
 
 const ProgressDashboard = lazy(() => import('../../components/progress/ProgressDashboard').then((m) => ({ default: m.ProgressDashboard })))
@@ -342,9 +342,43 @@ function Overview({ student, onTab, pending }: { student: Student; onTab: (t: Ta
             </p>
           </dl>
         </Card>
+        <CoachAssignment student={student} />
       </div>
       <WorkoutDetailModal workout={open} onClose={() => setOpen(null)} audience="coach" />
     </div>
+  )
+}
+
+/** Studio owners: who teaches this student. Changing it hands over the student with all their history. */
+function CoachAssignment({ student }: { student: Student }) {
+  const { data, actions } = useData()
+  const { session } = useSession()
+  const notify = useToast()
+  if (session?.role !== 'owner' || (data.studio?.coaches.length ?? 0) < 2) return null
+  const current = selectCoachOf(data, student.id)
+  const options = data.studio!.coaches.filter((c) => c.status === 'active' || c.id === current)
+  return (
+    <Card className="p-5">
+      <SelectInput
+        label="負責教練"
+        value={current ?? ''}
+        hint="轉給其他教練時，訓練紀錄、課表與堂數都會保留"
+        onChange={(e) => {
+          const to = e.target.value
+          const res = actions.transferStudent(student.id, to)
+          if (!res.ok) return notify(res.error, 'error')
+          notify(`${student.name} 已轉給 ${selectCoachName(data, to)}`)
+        }}
+      >
+        {options.map((c) => (
+          <option key={c.id} value={c.id} disabled={c.status !== 'active'}>
+            {c.name}
+            {c.role === 'owner' ? '（經營者）' : ''}
+            {c.status === 'inactive' ? '（已停用）' : ''}
+          </option>
+        ))}
+      </SelectInput>
+    </Card>
   )
 }
 

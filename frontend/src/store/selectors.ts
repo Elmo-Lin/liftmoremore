@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { isCoachRole } from '../lib/roles'
 import { studentBalance } from '../lib/sessions'
 import { completedWorkouts } from '../lib/stats'
 import type { AppData, Exercise, ID } from '../types'
@@ -27,10 +28,20 @@ export function useExerciseMap() {
 export function useCurrentStudent() {
   const { data } = useData()
   const { session } = useSession()
-  return session && session.role !== 'coach' ? selectStudent(data, session.studentId) : undefined
+  return session && !isCoachRole(session.role) ? selectStudent(data, session.studentId) : undefined
 }
 
 /** Self-trackers have no coach: hide coached sessions, session balances and assigned plans. */
 export function useIsSelf() {
   return useSession().session?.role === 'self'
 }
+
+/** The coach responsible for a student (studio owners see every coach's students). */
+export const selectCoachOf = (d: AppData, studentId: ID) => d.relationships.find((r) => r.studentId === studentId)?.coachId
+
+export const selectIsStudio = (d: AppData) => d.studio?.kind === 'studio'
+
+/** Coaches who can take students: the owner and activated, not deactivated coaches. */
+export const selectActiveCoaches = (d: AppData) => d.studio?.coaches.filter((c) => c.status === 'active') ?? []
+
+export const selectCoachName = (d: AppData, coachId?: ID) => d.studio?.coaches.find((c) => c.id === coachId)?.name ?? (coachId === d.coach.id ? d.coach.name : '')

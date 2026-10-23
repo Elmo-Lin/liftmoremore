@@ -1,4 +1,5 @@
 import {
+  Building2,
   CalendarDays,
   ChartLine,
   ClipboardList,
@@ -13,7 +14,8 @@ import {
 import { Suspense, useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router'
 import { BRAND } from '../../config/brand'
-import { useSession } from '../../store/contexts'
+import { useData, useSession } from '../../store/contexts'
+import { selectIsStudio } from '../../store/selectors'
 import { PageLoading } from '../ui/PageLoading'
 import { RoleSwitcher } from './RoleSwitcher'
 
@@ -37,6 +39,9 @@ const COACH_NAV: NavItem[] = [
   // On phones: from a student's 進步 tab.
   { to: '/coach/analytics', label: '數據分析', short: '數據', icon: ChartLine, desktopOnly: true },
 ]
+
+/** Owners manage their studio here; free coaches can upgrade from it. Phones reach it from the account menu. */
+const STUDIO_ITEM: NavItem = { to: '/coach/studio', label: '工作室', icon: Building2, desktopOnly: true }
 
 const STUDENT_NAV: NavItem[] = [
   { to: '/student', label: '首頁', icon: House, end: true },
@@ -81,7 +86,9 @@ function useScrolled() {
 export function AppShell() {
   const scrolled = useScrolled()
   const { session } = useSession()
-  const nav = session?.role === 'self' ? SELF_NAV : session?.role === 'student' ? STUDENT_NAV : COACH_NAV
+  const { data } = useData()
+  const showStudio = session?.role === 'owner' || (session?.role === 'coach' && !selectIsStudio(data))
+  const nav = session?.role === 'self' ? SELF_NAV : session?.role === 'student' ? STUDENT_NAV : showStudio ? [...COACH_NAV, STUDIO_ITEM] : COACH_NAV
   const tabBar = nav.filter((item) => !item.desktopOnly)
 
   return (
@@ -120,6 +127,7 @@ export function AppShell() {
             which shows the page background in the installed app), material + hairline once content
             scrolls underneath. */}
         <header
+          data-topbar
           className={`sticky top-0 z-30 flex h-12 items-center justify-between border-b px-4 transition-[background-color,border-color] duration-200 md:hidden ${
             scrolled ? 'material border-black/10' : 'border-transparent bg-canvas'
           }`}
@@ -137,6 +145,7 @@ export function AppShell() {
 
       {/* Mobile bottom nav */}
       <nav
+        data-tabbar
         aria-label="主要導覽"
         className={`material fixed inset-x-0 bottom-0 z-40 grid ${tabBar.length === 4 ? 'grid-cols-4' : 'grid-cols-5'} border-t border-black/10 pb-[env(safe-area-inset-bottom)] md:hidden`}
       >

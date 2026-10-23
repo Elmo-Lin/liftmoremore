@@ -90,5 +90,5 @@ function safeParse(text: string): unknown {
 export interface AuthResponse {
   token: string
   expiresAt: string
-  user: { userId: string; role: 'coach' | 'student' | 'self'; name: string; email: string; coachId: string; studentId?: string }
+  user: { userId: string; role: 'coach' | 'owner' | 'student' | 'self'; name: string; email: string; coachId: string; studentId?: string }
 }

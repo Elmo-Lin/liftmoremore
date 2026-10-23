@@ -42,7 +42,7 @@ public final class Mapper {
     }
 
     public static RelationshipDto relationship(Student s) {
-        return new RelationshipDto("rel_" + s.id, s.coachId, s.id, s.status, s.joinedAt);
+        return new RelationshipDto("rel_" + s.id, s.coach(), s.id, s.status, s.joinedAt);
     }
 
     public static ExerciseDto exercise(Exercise e) {

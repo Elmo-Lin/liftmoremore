@@ -49,8 +49,15 @@ export function requestsFor(name: Name, args: unknown[], value: unknown, before:
   switch (name) {
     case 'resetDemo':
       return [{ method: 'POST', path: '/demo/import', body: after }]
-    case 'addStudent':
-      return [{ method: 'POST', path: '/students', body: studentBody(value as Student) }]
+    case 'addStudent': {
+      const s = value as Student
+      const coachId = after.relationships.find((r) => r.studentId === s.id)?.coachId
+      return [{ method: 'POST', path: '/students', body: { ...studentBody(s), coachId: coachId !== after.coach.id ? coachId : undefined } }]
+    }
+    case 'transferStudent':
+      return [{ method: 'PUT', path: `/students/${args[0]}/coach`, body: { coachId: args[1] } }]
+    case 'deactivateCoach':
+      return [{ method: 'POST', path: `/studio/coaches/${args[0]}/deactivate`, body: { transferTo: args[1] ?? null } }]
     case 'updateStudent': {
       const s = after.students.find((x) => x.id === args[0])
       return s ? [{ method: 'PUT', path: `/students/${s.id}`, body: studentBody(s) }] : null

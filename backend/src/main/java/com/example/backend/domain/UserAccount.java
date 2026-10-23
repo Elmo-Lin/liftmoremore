@@ -13,7 +13,13 @@ public class UserAccount {
     public String email;
     public String phone;
     public String passwordHash;
-    /** Owning coach for students; the coach's own ID for coaches. */
+    /** Workspace this account belongs to: the coach's own ID for free coaches and studio owners. */
     public String coachId;
+    /** Coaches: shown on their profile (the workspace's title is used for the owner of older data). */
+    public String title;
+    /** Studio coaches the owner has deactivated can no longer sign in; null means active. */
+    public Boolean active;
+    /** Studio coaches: outstanding invite code until they activate. */
+    public String inviteCode;
     public Instant createdAt;
 }

@@ -4,9 +4,13 @@ import type { Appointment } from '../../types'
 // Drag a class to another day in the week view.
 // - Mouse: starts after moving a few pixels. Touch: starts after a long press, so a normal swipe
 //   still scrolls the page.
-// - Drop targets are elements with data-drop="yyyy-mm-dd" (a day) or "prev" / "next" (the edge
-//   zones): resting on an edge zone flips the week, repeatedly, so a class can travel several weeks.
-// - Near the edge zones the page auto-scrolls, so every day of the week is reachable on a phone.
+// - Drop targets are elements with data-drop="yyyy-mm-dd" (a day) or "prev" / "next" (zones above
+//   and below the week): resting on one flips the week, repeatedly, so a class can travel several weeks.
+// - Near the top / bottom of the visible area (inside the phone's top bar and tab bar) the page
+//   auto-scrolls, so every day and both zones are reachable on a phone.
+// - Flipping the week unmounts the row the finger went down on, and touch input keeps targeting
+//   that (now detached) element, so its events would no longer reach window listeners. Pointer
+//   capture is moved to <html>, and the scroll blocker is also attached to the row itself.
 
 const LONG_PRESS_MS = 350
 const MOVE_TOLERANCE = 8
@@ -45,6 +49,9 @@ export function useRescheduleDrag({ onDrop, onFlipWeek }: { onDrop: (a: Appointm
     if (e.button !== 0) return
     const origin = { x: e.clientX, y: e.clientY }
     const touch = e.pointerType !== 'mouse'
+    const { pointerId } = e
+    const row = e.currentTarget as HTMLElement
+    const blockScroll = (ev: TouchEvent) => ev.preventDefault()
     let pressTimer: number | undefined
     let flipTimer: number | undefined
     let flipZone: DropTarget = null
@@ -55,6 +62,12 @@ export function useRescheduleDrag({ onDrop, onFlipWeek }: { onDrop: (a: Appointm
       setDrag(next)
     }
     const begin = (x: number, y: number) => {
+      try {
+        document.documentElement.setPointerCapture(pointerId)
+      } catch {
+        // Pointer already gone (lifted during the long press); the pointerup handler cleans up.
+      }
+      row.addEventListener('touchmove', blockScroll, { passive: false })
       update({ appointment, x, y, over: null })
       navigator.vibrate?.(10)
       frame = requestAnimationFrame(autoScroll)
@@ -66,10 +79,12 @@ export function useRescheduleDrag({ onDrop, onFlipWeek }: { onDrop: (a: Appointm
     const autoScroll = () => {
       const d = dragRef.current
       if (!d) return
-      const top = document.querySelector('[data-drop="prev"]')?.getBoundingClientRect().bottom ?? 0
-      const bottom = document.querySelector('[data-drop="next"]')?.getBoundingClientRect().top ?? window.innerHeight
-      if (d.y > top && d.y < top + SCROLL_BAND) window.scrollBy(0, -Math.ceil((top + SCROLL_BAND - d.y) / 6))
-      else if (d.y < bottom && d.y > bottom - SCROLL_BAND) window.scrollBy(0, Math.ceil((d.y - (bottom - SCROLL_BAND)) / 6))
+      // Hidden bars (desktop) report a zero rect, which falls back to the window edges.
+      const top = Math.max(0, document.querySelector('[data-topbar]')?.getBoundingClientRect().bottom ?? 0)
+      const tabBar = document.querySelector('[data-tabbar]')?.getBoundingClientRect()
+      const bottom = tabBar && tabBar.height > 0 ? tabBar.top : window.innerHeight
+      if (d.y < top + SCROLL_BAND) window.scrollBy(0, -Math.ceil((top + SCROLL_BAND - Math.max(d.y, top)) / 6))
+      else if (d.y > bottom - SCROLL_BAND) window.scrollBy(0, Math.ceil((Math.min(d.y, bottom) - (bottom - SCROLL_BAND)) / 6))
       frame = requestAnimationFrame(autoScroll)
     }
     const setFlipZone = (zone: DropTarget) => {
@@ -111,6 +126,7 @@ export function useRescheduleDrag({ onDrop, onFlipWeek }: { onDrop: (a: Appointm
       window.clearTimeout(pressTimer)
       window.clearTimeout(flipTimer)
       cancelAnimationFrame(frame)
+      row.removeEventListener('touchmove', blockScroll)
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', end)
       window.removeEventListener('pointercancel', cleanup)

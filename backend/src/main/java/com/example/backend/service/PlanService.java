@@ -41,7 +41,7 @@ public class PlanService {
             if (self.activePlanId == null) return List.of();
             return db.get(db.coachDoc(user.coachId(), Db.PLANS, self.activePlanId), TrainingPlan.class).map(Mapper::plan).stream().toList();
         }
-        return db.list(db.coachCol(user.userId(), Db.PLANS), TrainingPlan.class).stream()
+        return db.list(db.coachCol(user.coachId(), Db.PLANS), TrainingPlan.class).stream()
                 .sorted(Comparator.comparing((TrainingPlan p) -> p.updatedAt).reversed())
                 .map(Mapper::plan)
                 .toList();
@@ -60,12 +60,12 @@ public class PlanService {
         Domain.require(Domain.GOALS, in.goal(), "goal");
         validateExercises(in.days());
         Instant now = Instant.now();
-        var ref = db.coachDoc(user.userId(), Db.PLANS, planId);
+        var ref = db.coachDoc(user.coachId(), Db.PLANS, planId);
         TrainingPlan existing = db.get(ref, TrainingPlan.class).orElse(null);
 
         TrainingPlan p = new TrainingPlan();
         p.id = planId;
-        p.coachId = user.userId();
+        p.coachId = user.coachId();
         p.createdAt = existing != null ? existing.createdAt : (in.createdAt() != null ? in.createdAt() : now);
         p.updatedAt = now;
         p.name = in.name().trim();
@@ -95,12 +95,12 @@ public class PlanService {
     }
 
     public void delete(CurrentUser user, String id) {
-        var ref = db.coachDoc(user.requireCoach().userId(), Db.PLANS, id);
+        var ref = db.coachDoc(user.requireCoach().coachId(), Db.PLANS, id);
         if (db.get(ref, TrainingPlan.class).isEmpty()) throw ApiException.notFound("找不到計畫");
         WriteBatch batch = db.fs.batch();
         // Unassign; past workouts keep their planId as a historical reference.
-        for (Student s : db.list(db.coachCol(user.userId(), Db.STUDENTS).whereEqualTo("activePlanId", id), Student.class)) {
-            batch.update(db.coachDoc(user.userId(), Db.STUDENTS, s.id), "activePlanId", com.google.cloud.firestore.FieldValue.delete());
+        for (Student s : db.list(db.coachCol(user.coachId(), Db.STUDENTS).whereEqualTo("activePlanId", id), Student.class)) {
+            batch.update(db.coachDoc(user.coachId(), Db.STUDENTS, s.id), "activePlanId", com.google.cloud.firestore.FieldValue.delete());
         }
         batch.delete(ref);
         Db.await(batch.commit());
@@ -109,12 +109,12 @@ public class PlanService {
     /** Sets exactly {@code studentIds} as the students on this plan (others on it are unassigned). */
     public void assign(CurrentUser user, String planId, List<String> studentIds) {
         user.requireCoach();
-        if (db.get(db.coachDoc(user.userId(), Db.PLANS, planId), TrainingPlan.class).isEmpty()) throw ApiException.notFound("找不到計畫");
+        if (db.get(db.coachDoc(user.coachId(), Db.PLANS, planId), TrainingPlan.class).isEmpty()) throw ApiException.notFound("找不到計畫");
         Set<String> chosen = new HashSet<>(studentIds);
         for (String sid : chosen) access.student(user, sid);
         WriteBatch batch = db.fs.batch();
-        for (Student s : db.list(db.coachCol(user.userId(), Db.STUDENTS), Student.class)) {
-            var ref = db.coachDoc(user.userId(), Db.STUDENTS, s.id);
+        for (Student s : access.visibleStudents(user)) {
+            var ref = db.coachDoc(user.coachId(), Db.STUDENTS, s.id);
             if (chosen.contains(s.id) && !planId.equals(s.activePlanId)) batch.update(ref, "activePlanId", planId);
             else if (!chosen.contains(s.id) && planId.equals(s.activePlanId)) batch.update(ref, "activePlanId", com.google.cloud.firestore.FieldValue.delete());
         }

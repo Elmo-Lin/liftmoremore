@@ -8,6 +8,7 @@ import com.example.backend.web.Dtos.LoginInput;
 import com.example.backend.web.Dtos.MeDto;
 import com.example.backend.web.Dtos.RegisterCoachInput;
 import com.example.backend.web.Dtos.RegisterSelfInput;
+import com.example.backend.web.Dtos.RegisterStudioInput;
 import jakarta.validation.Valid;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -45,6 +46,13 @@ public class AuthController {
     @ResponseStatus(HttpStatus.CREATED)
     public AuthResponse registerSelf(@Valid @RequestBody RegisterSelfInput in) {
         return auth.registerSelf(in);
+    }
+
+    /** Studio owner registration: a coach who can invite other coaches. */
+    @PostMapping("/auth/register-studio")
+    @ResponseStatus(HttpStatus.CREATED)
+    public AuthResponse registerStudio(@Valid @RequestBody RegisterStudioInput in) {
+        return auth.registerStudio(in);
     }
 
     @PostMapping("/auth/login")

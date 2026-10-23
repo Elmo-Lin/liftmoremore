@@ -11,7 +11,8 @@ export type ID = string
 /** ISO 8601 timestamp, e.g. 2026-10-20T09:30:00.000Z */
 export type ISODate = string
 
-export type Role = 'coach' | 'student' | 'self'
+/** 'owner' runs a studio and also teaches, so everywhere a coach can go an owner can too. */
+export type Role = 'coach' | 'owner' | 'student' | 'self'
 
 export interface User {
   id: ID
@@ -204,6 +205,32 @@ export interface Appointment {
   status: AppointmentStatus
 }
 
+export type CoachMemberStatus = 'active' | 'invited' | 'inactive'
+
+/** A coach in a workspace (studio owner included). */
+export interface CoachMember {
+  id: ID
+  role: 'owner' | 'coach'
+  name: string
+  email: string
+  title?: string
+  status: CoachMemberStatus
+  /** Owner only, while the coach has not activated their account. */
+  inviteCode?: string
+  createdAt: ISODate
+}
+
+/** The workspace: a free coach ('solo'), a studio with several coaches, or a self-tracker. */
+export interface Studio {
+  id: ID
+  kind: 'solo' | 'studio' | 'self'
+  name?: string
+  ownerId: ID
+  /** Seats for coaches, the owner included. */
+  maxCoaches?: number
+  coaches: CoachMember[]
+}
+
 export interface AppData {
   schemaVersion: number
   seededAt: ISODate
@@ -217,6 +244,8 @@ export interface AppData {
   transactions: SessionTransaction[]
   metrics: ProgressMetric[]
   appointments: Appointment[]
+  /** Coaches only. Who teaches a student is relationships[].coachId. */
+  studio?: Studio | null
 }
 
 export interface DemoSession {

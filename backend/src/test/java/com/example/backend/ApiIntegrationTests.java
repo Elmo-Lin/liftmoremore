@@ -282,6 +282,122 @@ class ApiIntegrationTests {
         assertThat(call(get("/api/appointments"), student, null).body().size()).isZero();
     }
 
+    // ------------------------------------------------------------------ studios
+
+    record Studio(String owner, String ownerId) {}
+
+    Studio registerStudio() throws Exception {
+        Resp r = call(post("/api/auth/register-studio"), null, Map.of("name", "經營者", "email", "owner-" + suffix + "@example.com", "password", "password123", "studio", "測試工作室"));
+        assertThat(r.status()).isEqualTo(201);
+        assertThat(r.body().get("user").get("role").asString()).isEqualTo("owner");
+        return new Studio(r.body().get("token").asString(), r.body().get("user").get("userId").asString());
+    }
+
+    /** Invites a coach and activates them; returns {coachId, token}. */
+    String[] studioCoach(String owner, String name) throws Exception {
+        Resp inv = call(post("/api/studio/coaches"), owner, Map.of("name", name, "email", name + "-" + suffix + "@example.com"));
+        assertThat(inv.status()).isEqualTo(201);
+        Resp act = call(post("/api/auth/activate"), null, Map.of("inviteCode", inv.body().get("inviteCode").asString(), "password", "coach12345"));
+        assertThat(act.status()).isEqualTo(200);
+        assertThat(act.body().get("user").get("role").asString()).isEqualTo("coach");
+        return new String[] {inv.body().get("coach").get("id").asString(), act.body().get("token").asString()};
+    }
+
+    @Test
+    void studioOwnerInvitesCoachesUpToTheSeatLimit() throws Exception {
+        Studio st = registerStudio();
+        JsonNode studio = call(get("/api/bootstrap"), st.owner(), null).body().get("studio");
+        assertThat(studio.get("kind").asString()).isEqualTo("studio");
+        assertThat(studio.get("maxCoaches").asInt()).isEqualTo(3);
+        assertThat(studio.get("coaches").size()).as("the owner takes a seat").isEqualTo(1);
+
+        studioCoach(st.owner(), "amy");
+        Resp pending = call(post("/api/studio/coaches"), st.owner(), Map.of("name", "bob", "email", "bob-" + suffix + "@example.com"));
+        assertThat(pending.body().get("coach").get("status").asString()).isEqualTo("invited");
+        Resp full = call(post("/api/studio/coaches"), st.owner(), Map.of("name", "cat", "email", "cat-" + suffix + "@example.com"));
+        assertThat(full.status()).isEqualTo(409);
+        assertThat(full.body().get("code").asString()).isEqualTo("seats_full");
+
+        assertThat(call(post("/api/auth/login"), null, Map.of("email", "amy-" + suffix + "@example.com", "password", "coach12345")).status()).isEqualTo(200);
+        assertThat(call(post("/api/studio/coaches"), coach, Map.of("name", "x", "email", "x-" + suffix + "@example.com")).status())
+                .as("free coaches cannot invite coaches").isEqualTo(403);
+    }
+
+    @Test
+    void studioCoachesSeeOnlyTheirOwnStudentsAndShareThePlans() throws Exception {
+        Studio st = registerStudio();
+        String[] amy = studioCoach(st.owner(), "amy");
+        String ownStudent = createStudent(st.owner(), "own");
+        Resp forAmy = call(post("/api/students"), st.owner(), Map.of("name", "forAmy", "email", "foramy-" + suffix + "@example.com", "gender", "female",
+                "goal", "strength", "weeklyFrequency", 2, "status", "active", "coachId", amy[0]));
+        assertThat(forAmy.status()).isEqualTo(201);
+        String amyStudent = forAmy.body().get("id").asString();
+        String amyOwn = createStudent(amy[1], "amyown");
+
+        JsonNode amyBoot = call(get("/api/bootstrap"), amy[1], null).body();
+        assertThat(amyBoot.get("students").size()).as("amy sees her two students").isEqualTo(2);
+        assertThat(amyBoot.get("coach").get("name").asString()).as("the profile is amy's own").isEqualTo("amy");
+        assertThat(call(get("/api/students/" + ownStudent), amy[1], null).status()).isEqualTo(404);
+        assertThat(call(put("/api/workouts/wo_amy" + suffix), amy[1], workout(ownStudent, "coached", "completed")).status()).isEqualTo(404);
+        assertThat(call(post("/api/students/" + ownStudent + "/packages"), amy[1], Map.of("name", "x", "totalSessions", 5, "priceTwd", 0,
+                "purchaseDate", Instant.now().toString())).status()).isEqualTo(404);
+        assertThat(call(get("/api/students"), st.owner(), null).body().size()).as("the owner sees every student").isEqualTo(3);
+        String rels = call(get("/api/bootstrap"), st.owner(), null).body().get("relationships").toString();
+        assertThat(rels).contains(amy[0]).contains(st.ownerId());
+
+        // Plans are shared, and assigning one only touches the coach's own students.
+        Map<String, Object> plan = Map.of("name", "共用計畫", "goal", "strength", "description", "",
+                "days", List.of(Map.of("id", "day_a", "name", "A", "exercises", List.of(Map.of("id", "rx_1", "exerciseId", "ex_squat", "sets", 3, "reps", "5")))));
+        String planId = "plan_s" + suffix;
+        call(put("/api/plans/" + planId), st.owner(), plan);
+        call(put("/api/plans/" + planId + "/assignments"), st.owner(), Map.of("studentIds", List.of(ownStudent)));
+        assertThat(call(get("/api/plans"), amy[1], null).body().size()).isEqualTo(1);
+        assertThat(call(put("/api/plans/" + planId + "/assignments"), amy[1], Map.of("studentIds", List.of(amyOwn))).status()).isEqualTo(204);
+        assertThat(call(get("/api/students/" + ownStudent), st.owner(), null).body().get("activePlanId").asString())
+                .as("amy's assignment leaves the owner's student alone").isEqualTo(planId);
+
+        assertThat(call(put("/api/students/" + amyOwn + "/coach"), amy[1], Map.of("coachId", st.ownerId())).status()).as("only the owner moves students").isEqualTo(403);
+        assertThat(call(post("/api/studio/coaches"), amy[1], Map.of("name", "x", "email", "x-" + suffix + "@example.com")).status()).isEqualTo(403);
+    }
+
+    @Test
+    void deactivatingACoachHandsOverTheirStudentsAndEndsTheirAccess() throws Exception {
+        Studio st = registerStudio();
+        String[] amy = studioCoach(st.owner(), "amy");
+        String[] ben = studioCoach(st.owner(), "ben");
+        String s1 = createStudent(amy[1], "s1");
+        call(put("/api/workouts/wo_s1" + suffix), amy[1], workout(s1, "coached", "completed"));
+
+        assertThat(call(put("/api/students/" + s1 + "/coach"), st.owner(), Map.of("coachId", ben[0])).status()).isEqualTo(204);
+        assertThat(call(get("/api/students/" + s1), ben[1], null).status()).as("ben now teaches s1").isEqualTo(200);
+        assertThat(call(get("/api/students/" + s1), amy[1], null).status()).isEqualTo(404);
+        assertThat(call(get("/api/workouts?studentId=" + s1), ben[1], null).body().size()).as("history moves with the student").isEqualTo(1);
+
+        assertThat(call(post("/api/studio/coaches/" + ben[0] + "/deactivate"), st.owner(), Map.of()).status()).as("must say who takes ben's students").isEqualTo(400);
+        assertThat(call(post("/api/studio/coaches/" + ben[0] + "/deactivate"), st.owner(), Map.of("transferTo", st.ownerId())).status()).isEqualTo(204);
+        assertThat(call(get("/api/bootstrap"), ben[1], null).status()).as("ben's token stops working at once").isEqualTo(401);
+        assertThat(call(post("/api/auth/login"), null, Map.of("email", "ben-" + suffix + "@example.com", "password", "coach12345")).status()).isEqualTo(401);
+        assertThat(call(get("/api/students/" + s1), st.owner(), null).status()).isEqualTo(200);
+        assertThat(call(post("/api/studio/coaches"), st.owner(), Map.of("name", "cat", "email", "cat-" + suffix + "@example.com")).status())
+                .as("ben's seat is free again").isEqualTo(201);
+        assertThat(call(post("/api/studio/coaches/" + st.ownerId() + "/deactivate"), st.owner(), Map.of()).status()).isEqualTo(400);
+    }
+
+    @Test
+    void aFreeCoachUpgradesToAStudioWithTheirStudents() throws Exception {
+        String sid = createStudent(coach, "keep");
+        Resp up = call(post("/api/studio/upgrade"), coach, Map.of("studio", "升級工作室"));
+        assertThat(up.status()).isEqualTo(200);
+        assertThat(up.body().get("user").get("role").asString()).isEqualTo("owner");
+        String owner = up.body().get("token").asString();
+        JsonNode boot = call(get("/api/bootstrap"), owner, null).body();
+        assertThat(boot.get("studio").get("kind").asString()).isEqualTo("studio");
+        assertThat(boot.get("studio").get("name").asString()).isEqualTo("升級工作室");
+        assertThat(boot.get("students").get(0).get("id").asString()).isEqualTo(sid);
+        assertThat(call(post("/api/studio/coaches"), owner, Map.of("name", "amy", "email", "amy-" + suffix + "@example.com")).status()).isEqualTo(201);
+        assertThat(call(post("/api/studio/upgrade"), owner, Map.of("studio", "x")).status()).isEqualTo(409);
+    }
+
     @Test
     void plansAreCoachAuthoredAndAssignable() throws Exception {
         String sid = createStudent(coach, "hal");

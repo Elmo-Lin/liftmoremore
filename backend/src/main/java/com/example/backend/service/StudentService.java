@@ -37,7 +37,7 @@ public class StudentService {
 
     public List<StudentDto> list(CurrentUser user) {
         if (user.isStudent()) return List.of(Mapper.student(access.student(user, user.userId()), false));
-        return db.list(db.coachCol(user.userId(), Db.STUDENTS), Student.class).stream()
+        return access.visibleStudents(user).stream()
                 .sorted(Comparator.comparing((Student s) -> s.joinedAt))
                 .map(s -> Mapper.student(s, true))
                 .toList();
@@ -56,14 +56,15 @@ public class StudentService {
 
         Student s = new Student();
         s.id = id;
-        s.coachId = user.userId();
+        s.coachId = user.coachId();
+        s.assignedCoachId = assignee(user, in.coachId());
         s.joinedAt = now;
         s.createdAt = now;
         apply(s, in);
         UserAccount account = new UserAccount();
         account.id = id;
         account.role = Domain.STUDENT;
-        account.coachId = user.userId();
+        account.coachId = user.coachId();
         account.createdAt = now;
         copyProfile(account, s);
 
@@ -73,7 +74,7 @@ public class StudentService {
             if (tx.get(db.doc(Db.USERS, id), UserAccount.class).isPresent()) throw ApiException.conflict("id_taken", "此 ID 已被使用");
             tx.create(db.doc(Db.USERS, id), account);
             tx.create(emailRef, new EmailOwner(id));
-            tx.create(db.coachDoc(user.userId(), Db.STUDENTS, id), s);
+            tx.create(db.coachDoc(user.coachId(), Db.STUDENTS, id), s);
             return null;
         });
         return Mapper.student(s, true);
@@ -84,7 +85,7 @@ public class StudentService {
         validate(user, in);
         String newEmail = in.email().trim();
         return db.transaction(tx -> {
-            DocumentReference ref = db.coachDoc(user.userId(), Db.STUDENTS, id);
+            DocumentReference ref = db.coachDoc(user.coachId(), Db.STUDENTS, id);
             Student s = tx.get(ref, Student.class).orElseThrow(() -> ApiException.notFound("找不到此學員"));
             UserAccount account = tx.get(db.doc(Db.USERS, id), UserAccount.class).orElseThrow();
             boolean emailChanged = !key(s.email).equals(key(newEmail));
@@ -143,6 +144,20 @@ public class StudentService {
         return new InviteDto(invite.code, invite.expiresAt);
     }
 
+    /**
+     * Coach responsible for a new student: the caller, or (studio owner only) another active coach
+     * of the studio.
+     */
+    private String assignee(CurrentUser user, String requested) {
+        if (requested == null || requested.isBlank() || requested.equals(user.userId())) return user.userId();
+        user.requireOwner();
+        UserAccount coach = db.get(db.doc(Db.USERS, requested), UserAccount.class).orElseThrow(() -> ApiException.badRequest("找不到此教練"));
+        if (!user.coachId().equals(coach.coachId) || !Domain.COACH.equals(coach.role) || Boolean.FALSE.equals(coach.active)) {
+            throw ApiException.badRequest("找不到此教練");
+        }
+        return coach.id;
+    }
+
     /** {@code emails/{email}} document body. */
     public static class EmailOwner {
         public String userId;
@@ -163,7 +178,7 @@ public class StudentService {
         Domain.require(Domain.GOALS, in.goal(), "goal");
         Domain.require(Domain.STUDENT_STATUSES, in.status(), "status");
         if (in.birthYear() != null && in.birthYear() > Year.now().getValue() - 10) throw ApiException.badRequest("出生年份不合理");
-        if (in.activePlanId() != null && !Db.await(db.coachDoc(user.userId(), Db.PLANS, in.activePlanId()).get()).exists()) {
+        if (in.activePlanId() != null && !Db.await(db.coachDoc(user.coachId(), Db.PLANS, in.activePlanId()).get()).exists()) {
             throw ApiException.badRequest("找不到指派的計畫");
         }
     }

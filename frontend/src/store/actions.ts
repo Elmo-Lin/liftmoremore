@@ -2,10 +2,12 @@
 // the latest state and returns a Result so the UI can show a precise error.
 import { generateMockData } from '../data/mock'
 import { uid } from '../lib/id'
+import { isCoachRole } from '../lib/roles'
 import { deductionBlocker, deductionFor, packageBalance, studentBalance } from '../lib/sessions'
 import type {
   AppData,
   Appointment,
+  CoachMember,
   ID,
   Role,
   SessionPackage,
@@ -67,6 +69,11 @@ export function validatePackage(input: PackageInput): Record<string, string> {
   return errors
 }
 
+/** Seats count the owner and every coach who is active or invited. */
+export const seatsOf = (d: AppData) => d.studio?.maxCoaches ?? 3
+export const seatsUsed = (d: AppData) => d.studio?.coaches.filter((c) => c.status !== 'inactive').length ?? 1
+const isActiveCoach = (d: AppData, id: ID) => d.studio?.coaches.some((c) => c.id === id && c.status === 'active') ?? id === d.coach.id
+
 export function createActions(get: () => AppData, set: (next: AppData) => void, actor: () => Role) {
   const update = (fn: (d: AppData) => AppData) => set(fn(get()))
 
@@ -76,11 +83,14 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
     },
 
     // ---------------- Students ----------------
-    addStudent(input: StudentInput): Result<Student> {
+    /** `coachId`: studio owner only, the coach responsible for the new student (defaults to the caller). */
+    addStudent(input: StudentInput, coachId?: ID): Result<Student> {
       const d = get()
       const errors = validateStudent(input, d.students)
       const first = Object.values(errors)[0]
       if (first) return fail(first)
+      const teacher = coachId ?? d.coach.id
+      if (teacher !== d.coach.id && (actor() !== 'owner' || !isActiveCoach(d, teacher))) return fail('找不到此教練')
       const now = nowISO()
       const student: Student = {
         ...input,
@@ -96,7 +106,7 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
         students: [...d.students, student],
         relationships: [
           ...d.relationships,
-          { id: uid('rel'), coachId: d.coach.id, studentId: student.id, status: student.status, startedAt: now },
+          { id: uid('rel'), coachId: teacher, studentId: student.id, status: student.status, startedAt: now },
         ],
       }))
       return ok(student)
@@ -135,7 +145,7 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
     // ---------------- Plans ----------------
     /** Creates or updates appointments by id (several at once for a weekly series). Coach only. */
     saveAppointments(list: Appointment[]): Result<Appointment[]> {
-      if (actor() !== 'coach') return fail('只有教練可以安排課程')
+      if (!isCoachRole(actor())) return fail('只有教練可以安排課程')
       const d = get()
       for (const a of list) {
         if (!d.students.some((s) => s.id === a.studentId)) return fail('找不到此學員')
@@ -149,10 +159,71 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
     },
 
     deleteAppointment(id: ID): Result {
-      if (actor() !== 'coach') return fail('只有教練可以安排課程')
+      if (!isCoachRole(actor())) return fail('只有教練可以安排課程')
       if (!get().appointments.some((a) => a.id === id)) return fail('找不到此課程')
       update((x) => ({ ...x, appointments: x.appointments.filter((a) => a.id !== id) }))
       return ok(undefined)
+    },
+
+    // ---------------- Studio (owner) ----------------
+    /** Hands a student, with all their history, to another active coach of the studio. */
+    transferStudent(studentId: ID, coachId: ID): Result {
+      const d = get()
+      if (actor() !== 'owner') return fail('只有工作室經營者可以執行此操作')
+      if (!d.students.some((s) => s.id === studentId)) return fail('找不到此學員')
+      if (!isActiveCoach(d, coachId)) return fail('此教練尚未啟用或已停用')
+      update((x) => ({ ...x, relationships: x.relationships.map((r) => (r.studentId === studentId ? { ...r, coachId } : r)) }))
+      return ok(undefined)
+    },
+
+    /**
+     * The coach loses access; their students move to `transferTo` (required when they have any).
+     * A coach who never activated is removed, freeing their seat and email.
+     */
+    deactivateCoach(coachId: ID, transferTo?: ID): Result {
+      const d = get()
+      if (actor() !== 'owner' || !d.studio) return fail('只有工作室經營者可以執行此操作')
+      const coach = d.studio.coaches.find((c) => c.id === coachId)
+      if (!coach) return fail('找不到此教練')
+      if (coach.role === 'owner') return fail('無法停用經營者')
+      const theirs = d.relationships.some((r) => r.coachId === coachId)
+      if (theirs && (!transferTo || transferTo === coachId || !isActiveCoach(d, transferTo))) return fail('請選擇接手學員的教練')
+      update((x) => ({
+        ...x,
+        relationships: x.relationships.map((r) => (r.coachId === coachId && transferTo ? { ...r, coachId: transferTo } : r)),
+        studio: x.studio && {
+          ...x.studio,
+          coaches:
+            coach.status === 'invited'
+              ? x.studio.coaches.filter((c) => c.id !== coachId)
+              : x.studio.coaches.map((c) => (c.id === coachId ? { ...c, status: 'inactive' as const, inviteCode: undefined } : c)),
+        },
+      }))
+      return ok(undefined)
+    },
+
+    /** Offline demo only (the real invite is created by the server, see api/studio.ts). */
+    inviteCoachDemo(input: { name: string; email: string; title?: string }): Result<CoachMember> {
+      const d = get()
+      if (actor() !== 'owner' || !d.studio) return fail('只有工作室經營者可以執行此操作')
+      if (!input.name.trim()) return fail('請輸入姓名')
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email.trim())) return fail('Email 格式不正確')
+      const email = input.email.trim().toLowerCase()
+      if (d.studio.coaches.some((c) => c.email.toLowerCase() === email) || d.students.some((s) => s.email.toLowerCase() === email))
+        return fail('此 Email 已被其他帳號使用')
+      if (seatsUsed(d) >= seatsOf(d)) return fail(`教練名額已滿（${seatsOf(d)} 位，含經營者）`)
+      const member: CoachMember = {
+        id: uid('coach'),
+        role: 'coach',
+        name: input.name.trim(),
+        email: input.email.trim(),
+        title: input.title?.trim() || '教練',
+        status: 'invited',
+        inviteCode: uid('x').slice(2, 10).toUpperCase(),
+        createdAt: nowISO(),
+      }
+      update((x) => ({ ...x, studio: x.studio && { ...x.studio, coaches: [...x.studio.coaches, member] } }))
+      return ok(member)
     },
 
     savePlan(plan: TrainingPlan): Result<TrainingPlan> {
@@ -226,7 +297,7 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
         return fail('已扣堂的課程無法更換學員')
       const role = actor()
       // Students can only log independent workouts for themselves.
-      if (role !== 'coach' && workout.type !== 'independent') return fail('學員只能記錄自主訓練')
+      if (!isCoachRole(role) && workout.type !== 'independent') return fail('學員只能記錄自主訓練')
       if (workout.status === 'completed') {
         const hasSet = workout.exercises.some((e) => e.sets.some((s) => s.completed))
         if (!hasSet) return fail('請至少完成一組再結束訓練')
@@ -250,7 +321,7 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
     /** Deduct one coaching session for a completed coached workout. Never automatic. */
     deductSession(workoutId: ID): Result<{ packageName: string; remaining: number }> {
       const d = get()
-      if (actor() !== 'coach') return fail('只有教練可以扣除堂數')
+      if (!isCoachRole(actor())) return fail('只有教練可以扣除堂數')
       const workout = d.workouts.find((w) => w.id === workoutId)
       if (!workout) return fail('找不到此訓練紀錄')
       const balance = studentBalance(workout.studentId, d.packages, d.transactions)
@@ -279,7 +350,7 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
 
     reverseDeduction(workoutId: ID, reason: string): Result {
       const d = get()
-      if (actor() !== 'coach') return fail('只有教練可以調整堂數')
+      if (!isCoachRole(actor())) return fail('只有教練可以調整堂數')
       const tx = deductionFor(workoutId, d.transactions)
       if (!tx) return fail('此課程尚未扣堂')
       if (!reason.trim()) return fail('請輸入撤銷原因')
@@ -340,7 +411,7 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
 
     adjustPackage(packageId: ID, delta: number, reason: string): Result<number> {
       const d = get()
-      if (actor() !== 'coach') return fail('只有教練可以調整堂數')
+      if (!isCoachRole(actor())) return fail('只有教練可以調整堂數')
       const pkg = d.packages.find((p) => p.id === packageId)
       if (!pkg) return fail('找不到方案')
       if (!Number.isInteger(delta) || delta === 0) return fail('調整數量需為非 0 的整數')

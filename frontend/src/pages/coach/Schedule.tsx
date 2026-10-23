@@ -3,11 +3,12 @@ import { useState } from 'react'
 import { AppointmentModal } from '../../components/schedule/AppointmentModal'
 import { useRescheduleDrag, type DragState } from '../../components/schedule/useRescheduleDrag'
 import { Button, ButtonLink, IconButton } from '../../components/ui/Button'
+import { Segmented } from '../../components/ui/Form'
 import { Avatar, Badge, Card, DemoNotice, PageHeader } from '../../components/ui/Primitives'
 import { addDays, formatDate, formatTime, isSameDay, startOfWeek, toDateInput } from '../../lib/format'
 import { endOf, findConflicts, STATUS_LABEL } from '../../lib/schedule'
-import { useData, useToast } from '../../store/contexts'
-import { selectStudent } from '../../store/selectors'
+import { useData, useSession, useToast } from '../../store/contexts'
+import { selectCoachName, selectCoachOf, selectStudent } from '../../store/selectors'
 import type { Appointment } from '../../types'
 
 const WEEKDAY = ['週一', '週二', '週三', '週四', '週五', '週六', '週日']
@@ -19,6 +20,10 @@ export function CoachSchedulePage() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [editing, setEditing] = useState<Appointment | null>(null)
   const [creating, setCreating] = useState<{ date?: Date } | null>(null)
+  // Studio owners see every coach's classes, and can narrow to their own.
+  const { session } = useSession()
+  const multiCoach = session?.role === 'owner' && (data.studio?.coaches.length ?? 0) > 1
+  const [scope, setScope] = useState<'all' | 'mine'>('all')
 
   // Moving keeps the time of day and only changes the date.
   const { drag, start, consumeClick } = useRescheduleDrag({
@@ -45,7 +50,7 @@ export function CoachSchedulePage() {
   const inWeek = data.appointments
     .filter((a) => {
       const t = new Date(a.startAt).getTime()
-      return t >= from && t < to
+      return t >= from && t < to && (scope === 'all' || selectCoachOf(data, a.studentId) === data.coach.id)
     })
     .sort((a, b) => a.startAt.localeCompare(b.startAt))
   const scheduled = inWeek.filter((a) => a.status !== 'cancelled').length
@@ -74,59 +79,74 @@ export function CoachSchedulePage() {
             本週
           </Button>
         )}
+        {multiCoach && (
+          <div className="ml-auto hidden sm:block">
+            <Segmented label="顯示範圍" size="sm" value={scope} onChange={setScope} options={[{ value: 'all', label: '全工作室' }, { value: 'mine', label: '我的課' }]} />
+          </div>
+        )}
       </div>
+      {multiCoach && (
+        <div className="mb-3 sm:hidden">
+          <Segmented label="顯示範圍" size="sm" value={scope} onChange={setScope} options={[{ value: 'all', label: '全工作室' }, { value: 'mine', label: '我的課' }]} />
+        </div>
+      )}
       <p className="mb-4 text-[13px] text-ink-500">
         {weekOffset === 0 ? '本週' : weekOffset === 1 ? '下週' : weekOffset === -1 ? '上週' : '這週'} {scheduled} 堂課{cancelled ? `・已取消 ${cancelled} 堂` : ''}
         <span className="text-ink-400">・長按或拖曳課程可改日期</span>
       </p>
 
-      <Card className="divide-y divide-line">
-        {days.map((day, i) => {
-          const list = inWeek.filter((a) => isSameDay(a.startAt, day))
-          const isToday = isSameDay(day, today)
-          return (
-            <section
-              key={day.toISOString()}
-              data-drop={toDateInput(day)}
-              className={`flex gap-2 px-3 py-3 transition-colors sm:gap-5 sm:px-5 ${drag?.over === toDateInput(day) ? 'bg-accent-50' : ''}`}
-              aria-label={`${WEEKDAY[i]} ${formatDate(day)}`}
-            >
-              <div className="w-10 shrink-0 pt-1 text-center sm:w-12">
-                <p className={`text-xs ${isToday ? 'font-semibold text-accent-700' : 'text-ink-500'}`}>{isToday ? '今天' : WEEKDAY[i]}</p>
-                <p className={`tabular mt-0.5 text-[17px] font-semibold ${isToday ? 'text-accent-700' : 'text-ink-900'}`}>{day.getDate()}</p>
-              </div>
-              <div className="min-w-0 flex-1">
-                {list.length ? (
-                  <ul className="space-y-1.5">
-                    {list.map((a) => (
-                      <AppointmentRow
-                        key={a.id}
-                        appointment={a}
-                        showStart={isToday}
-                        dragging={drag?.appointment.id === a.id}
-                        onPointerDown={(e) => start(e, a)}
-                        onOpen={() => !consumeClick() && setEditing(a)}
-                      />
-                    ))}
-                  </ul>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setCreating({ date: day })}
-                    className="flex h-10 w-full items-center gap-1.5 rounded-lg px-2.5 text-[13px] text-ink-400 transition-colors hover:bg-subtle hover:text-accent-700"
-                    aria-label={`在 ${formatDate(day)} 安排課程`}
-                  >
-                    <Plus className="size-4" />
-                    沒有課程
-                  </button>
-                )}
-              </div>
-            </section>
-          )
-        })}
-      </Card>
+      <div className="relative">
+        {drag && <WeekZone dir="prev" over={drag.over === 'prev'} />}
+        <Card className="divide-y divide-line">
+          {days.map((day, i) => {
+            const list = inWeek.filter((a) => isSameDay(a.startAt, day))
+            const isToday = isSameDay(day, today)
+            return (
+              <section
+                key={day.toISOString()}
+                data-drop={toDateInput(day)}
+                className={`flex gap-2 px-3 py-3 transition-colors sm:gap-5 sm:px-5 ${drag?.over === toDateInput(day) ? 'bg-accent-50' : ''}`}
+                aria-label={`${WEEKDAY[i]} ${formatDate(day)}`}
+              >
+                <div className="w-10 shrink-0 pt-1 text-center sm:w-12">
+                  <p className={`text-xs ${isToday ? 'font-semibold text-accent-700' : 'text-ink-500'}`}>{isToday ? '今天' : WEEKDAY[i]}</p>
+                  <p className={`tabular mt-0.5 text-[17px] font-semibold ${isToday ? 'text-accent-700' : 'text-ink-900'}`}>{day.getDate()}</p>
+                </div>
+                <div className="min-w-0 flex-1">
+                  {list.length ? (
+                    <ul className="space-y-1.5">
+                      {list.map((a) => (
+                        <AppointmentRow
+                          key={a.id}
+                          appointment={a}
+                          showStart={isToday}
+                          showCoach={multiCoach && scope === 'all'}
+                          dragging={drag?.appointment.id === a.id}
+                          onPointerDown={(e) => start(e, a)}
+                          onOpen={() => !consumeClick() && setEditing(a)}
+                        />
+                      ))}
+                    </ul>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setCreating({ date: day })}
+                      className="flex h-10 w-full items-center gap-1.5 rounded-lg px-2.5 text-[13px] text-ink-400 transition-colors hover:bg-subtle hover:text-accent-700"
+                      aria-label={`在 ${formatDate(day)} 安排課程`}
+                    >
+                      <Plus className="size-4" />
+                      沒有課程
+                    </button>
+                  )}
+                </div>
+              </section>
+            )
+          })}
+        </Card>
+        {drag && <WeekZone dir="next" over={drag.over === 'next'} />}
+      </div>
       <DemoNotice className="mt-6" />
-      {drag && <DragOverlay drag={drag} />}
+      {drag && <DragGhost drag={drag} />}
 
       <AppointmentModal open={!!creating} onClose={() => setCreating(null)} defaults={creating ?? undefined} />
       <AppointmentModal open={!!editing} onClose={() => setEditing(null)} appointment={editing ?? undefined} />
@@ -134,32 +154,34 @@ export function CoachSchedulePage() {
   )
 }
 
-/** While dragging: the class following the pointer, plus "previous / next week" zones at the screen edges. */
-function DragOverlay({ drag }: { drag: DragState }) {
+/** Drop zone floating just above / below the week card while dragging; resting on it flips the week. */
+function WeekZone({ dir, over }: { dir: 'prev' | 'next'; over: boolean }) {
+  const Icon = dir === 'prev' ? ChevronUp : ChevronDown
+  return (
+    <div
+      data-drop={dir}
+      className={`absolute inset-x-0 z-20 flex h-14 items-center justify-center gap-1.5 rounded-xl border-2 border-dashed text-sm font-medium transition-colors ${
+        dir === 'prev' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+      } ${over ? 'border-accent-600 bg-accent-600 text-white' : 'border-accent-200 bg-accent-50 text-accent-700'}`}
+    >
+      <Icon className="size-4" />
+      停在這裡切換到{dir === 'prev' ? '上一週' : '下一週'}
+    </div>
+  )
+}
+
+/** The class following the pointer while it is dragged. */
+function DragGhost({ drag }: { drag: DragState }) {
   const { data } = useData()
   const a = drag.appointment
-  const zone = (dir: 'prev' | 'next') =>
-    `fixed inset-x-0 z-50 flex h-14 items-center justify-center gap-1.5 text-sm font-medium transition-colors md:left-60 ${
-      drag.over === dir ? 'bg-accent-600 text-white' : 'bg-accent-50/95 text-accent-700 backdrop-blur'
-    }`
   return (
-    <>
-      <div data-drop="prev" className={`${zone('prev')} top-12 border-b border-accent-100 md:top-0`}>
-        <ChevronUp className="size-4" />
-        停在這裡切換到上一週
-      </div>
-      <div data-drop="next" className={`${zone('next')} bottom-[calc(50px+env(safe-area-inset-bottom))] border-t border-accent-100 md:bottom-0`}>
-        <ChevronDown className="size-4" />
-        停在這裡切換到下一週
-      </div>
-      <div
-        className="pointer-events-none fixed z-[60] -translate-x-1/2 -translate-y-[120%] rounded-lg bg-surface px-3 py-2 text-sm shadow-[0_8px_24px_rgba(0,0,0,0.18)] ring-1 ring-accent-600"
-        style={{ left: drag.x, top: drag.y }}
-      >
-        <span className="tabular font-semibold text-ink-900">{formatTime(a.startAt)}</span>
-        <span className="ml-2 text-ink-700">{selectStudent(data, a.studentId)?.name}</span>
-      </div>
-    </>
+    <div
+      className="pointer-events-none fixed z-[60] -translate-x-1/2 -translate-y-[120%] rounded-lg bg-surface px-3 py-2 text-sm shadow-[0_8px_24px_rgba(0,0,0,0.18)] ring-1 ring-accent-600"
+      style={{ left: drag.x, top: drag.y }}
+    >
+      <span className="tabular font-semibold text-ink-900">{formatTime(a.startAt)}</span>
+      <span className="ml-2 text-ink-700">{selectStudent(data, a.studentId)?.name}</span>
+    </div>
   )
 }
 
@@ -168,12 +190,14 @@ function AppointmentRow({
   onOpen,
   onPointerDown,
   showStart,
+  showCoach,
   dragging,
 }: {
   appointment: Appointment
   onOpen: () => void
   onPointerDown: (e: React.PointerEvent) => void
   showStart: boolean
+  showCoach?: boolean
   dragging: boolean
 }) {
   const { data } = useData()
@@ -200,6 +224,7 @@ function AppointmentRow({
         <span className="min-w-0 flex-1">
           <span className={`block truncate text-sm font-medium text-ink-900 ${cancelled ? 'line-through' : ''}`}>{s?.name ?? '已刪除的學員'}</span>
           <span className="block truncate text-xs text-ink-500">
+            {showCoach && `${selectCoachName(data, selectCoachOf(data, a.studentId))}・`}
             {a.location}・{a.durationMin} 分鐘
           </span>
         </span>

@@ -5,7 +5,10 @@ import java.time.Instant;
 /** {@code coaches/{coachId}/students/{id}} — profile as the coach manages it. */
 public class Student {
     public String id;
+    /** Workspace the student belongs to (not necessarily the coach who teaches them). */
     public String coachId;
+    /** Coach responsible for this student in a studio; null means the workspace owner. */
+    public String assignedCoachId;
     public String name;
     public String email;
     public String phone;
@@ -25,4 +28,9 @@ public class Student {
     public boolean activated;
     /** Current outstanding invite code (so a new invite can revoke the old one). */
     public String inviteCode;
+
+    /** The coach responsible for this student. */
+    public String coach() {
+        return assignedCoachId != null ? assignedCoachId : coachId;
+    }
 }

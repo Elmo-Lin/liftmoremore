@@ -8,9 +8,17 @@ public final class Domain {
     private Domain() {}
 
     public static final String COACH = "coach";
+    /** Studio owner: a coach who also manages the studio (invites coaches, sees every student). */
+    public static final String OWNER = "owner";
     public static final String STUDENT = "student";
     /** Self-tracker: no coach; owns a one-person space where they are the only student. */
     public static final String SELF = "self";
+
+    /** Kinds of workspace ({@code coaches/{id}}): a free coach, a studio with several coaches, or a self-tracker. */
+    public static final String SPACE_SOLO = "solo";
+    public static final String SPACE_STUDIO = "studio";
+    public static final String SPACE_SELF = "self";
+    public static final int DEFAULT_STUDIO_SEATS = 3;
 
     public static final Set<String> GOALS = Set.of("strength", "hypertrophy", "fatLoss", "general", "powerlifting", "mobility");
     public static final Set<String> GENDERS = Set.of("female", "male", "other");

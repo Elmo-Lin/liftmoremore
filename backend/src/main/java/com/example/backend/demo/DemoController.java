@@ -70,7 +70,7 @@ public class DemoController {
         requireEnabled();
         if (!demo.isSeeded()) throw ApiException.conflict("demo_not_seeded", "尚未匯入示範資料");
         String coachId = demo.firstCoachId();
-        if (Domain.COACH.equals(in.role())) return auth.issueFor(coachId);
+        if (Domain.COACH.equals(in.role()) || Domain.OWNER.equals(in.role())) return auth.issueFor(coachId);
         if (!Domain.STUDENT.equals(in.role())) throw ApiException.badRequest("role 的值不正確");
         String studentId = in.studentId() != null ? in.studentId()
                 : db.list(db.coachCol(coachId, Db.STUDENTS), Student.class).stream()

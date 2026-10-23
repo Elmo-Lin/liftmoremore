@@ -45,7 +45,7 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/health", "/api/auth/register", "/api/auth/register-self", "/api/auth/login", "/api/auth/activate").permitAll()
+                        .requestMatchers("/api/health", "/api/auth/register", "/api/auth/register-self", "/api/auth/register-studio", "/api/auth/login", "/api/auth/activate").permitAll()
                         .requestMatchers("/api/demo/**").permitAll() // guarded by coachlog.demo.enabled in DemoController
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(o -> o.jwt(jwt -> {}))

@@ -22,6 +22,11 @@ import { EXERCISES, REFERENCE_WEIGHT } from './exercises'
 export const SCHEMA_VERSION = 1
 export const COACH_ID = 'coach_lin'
 export const DEFAULT_DEMO_STUDENT_ID = 'stu_01'
+/** The demo is a studio: Stone owns it, and Mia teaches the students below. */
+export const DEMO_COACH_ROLE = 'owner' as const
+const MIA_ID = 'coach_mia'
+const MIA_STUDENTS = new Set(['stu_03', 'stu_05', 'stu_07', 'stu_11'])
+const teacherOf = (studentId: string) => (MIA_STUDENTS.has(studentId) ? MIA_ID : COACH_ID)
 
 const HISTORY_WEEKS = 14
 const DAY = 86400000
@@ -363,7 +368,7 @@ export function generateMockData(nowDate = new Date()): AppData {
     students.push(student)
     relationships.push({
       id: `rel_${student.id}`,
-      coachId: COACH_ID,
+      coachId: teacherOf(student.id),
       studentId: student.id,
       status: student.status,
       startedAt: student.joinedAt,
@@ -420,7 +425,7 @@ export function generateMockData(nowDate = new Date()): AppData {
       const workout: WorkoutSession = {
         id: id('wo'),
         studentId: student.id,
-        coachId: type === 'coached' ? COACH_ID : undefined,
+        coachId: type === 'coached' ? teacherOf(student.id) : undefined,
         type,
         createdBy: type === 'coached' ? 'coach' : 'student',
         status: 'completed',
@@ -608,5 +613,16 @@ export function generateMockData(nowDate = new Date()): AppData {
     transactions,
     metrics,
     appointments,
+    studio: {
+      id: COACH_ID,
+      kind: 'studio',
+      name: coach.studio,
+      ownerId: COACH_ID,
+      maxCoaches: 3,
+      coaches: [
+        { id: COACH_ID, role: 'owner', name: coach.name, email: coach.email, title: coach.title, status: 'active', createdAt: coach.createdAt },
+        { id: MIA_ID, role: 'coach', name: 'Mia Chou', email: 'mia.chou@example.com', title: '體能教練', status: 'active', createdAt: new Date(now - 200 * DAY).toISOString() },
+      ],
+    },
   }
 }

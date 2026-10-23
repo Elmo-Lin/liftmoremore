@@ -46,7 +46,9 @@ public class WorkoutService {
         } else if (user.isStudent()) {
             q = q.whereEqualTo("studentId", user.userId());
         }
+        Set<String> visible = studentId != null || user.isStudent() ? null : access.visibleStudentIds(user);
         return db.list(q, Workout.class).stream()
+                .filter(w -> visible == null || visible.contains(w.studentId))
                 .sorted(Comparator.comparing((Workout w) -> w.startedAt).reversed())
                 .map(Mapper::workout)
                 .toList();
@@ -55,6 +57,7 @@ public class WorkoutService {
     public WorkoutDto get(CurrentUser user, String id) {
         Workout w = db.get(db.coachDoc(user.coachId(), Db.WORKOUTS, id), Workout.class).orElseThrow(WorkoutService::notFound);
         if (user.isStudent() && !w.studentId.equals(user.userId())) throw notFound();
+        requireVisible(user, w.studentId);
         return Mapper.workout(w);
     }
 
@@ -118,6 +121,7 @@ public class WorkoutService {
                 if (!w.studentId.equals(user.userId())) throw notFound();
                 if (!Domain.STUDENT.equals(w.createdBy)) throw ApiException.forbidden("無法刪除教練記錄的課程");
             }
+            requireVisible(user, w.studentId);
             List<SessionTransaction> linked = tx.list(db.coachCol(user.coachId(), Db.TRANSACTIONS).whereEqualTo("workoutId", id), SessionTransaction.class);
             if (Ledger.netForWorkout(id, linked) < 0) throw ApiException.conflict("already_deducted", "此課程已扣堂，請先撤銷扣堂再刪除");
             tx.delete(ref);
@@ -133,6 +137,13 @@ public class WorkoutService {
                 if (s.completed() && (s.reps() == null || s.reps() <= 0)) throw ApiException.badRequest("已完成的組數需要填寫次數");
             }
         }
+    }
+
+    /** Studio coaches may only touch their own students' workouts (students are checked by ID above). */
+    private void requireVisible(CurrentUser user, String studentId) {
+        if (user.isStudent()) return;
+        Student s = db.get(db.coachDoc(user.coachId(), Db.STUDENTS, studentId), Student.class).orElseThrow(WorkoutService::notFound);
+        if (!access.canSee(user, s)) throw notFound();
     }
 
     private static ApiException notFound() {

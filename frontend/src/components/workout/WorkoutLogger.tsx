@@ -70,7 +70,7 @@ function useNow(intervalMs: number) {
   return now
 }
 
-export function WorkoutLogger({ mode, fixedStudentId }: { mode: Exclude<Role, 'self'>; fixedStudentId?: ID }) {
+export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'student'; fixedStudentId?: ID }) {
   const { data, actions } = useData()
   const notify = useToast()
   const navigate = useNavigate()
@@ -292,7 +292,7 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: Exclude<Role, 's
                   <p className="mb-2 text-[13px] font-medium text-ink-700">
                     從計畫開始<span className="ml-1.5 font-normal text-ink-500">{activePlan.name}</span>
                   </p>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {activePlan.days.map((d) => (
                       <button
                         key={d.id}
@@ -319,7 +319,7 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: Exclude<Role, 's
 
               {mode === 'coach' && <OtherPlanPicker excludeId={activePlan?.id} onStart={startFromDay} />}
 
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {lastWorkout && (
                   <button
                     type="button"

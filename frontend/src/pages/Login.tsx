@@ -1,7 +1,7 @@
 import { ArrowRight, ChartLine, ClipboardList, Dumbbell, Ticket, UserRound, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { activateInvite, login, registerCoach, registerSelf } from '../api/auth'
+import { activateInvite, login, registerCoach, registerSelf, registerStudio } from '../api/auth'
 import { enterLocalDemo, exitLocalDemo, isApiMode, isLocalDemo } from '../api/client'
 import { Logo } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
@@ -9,7 +9,8 @@ import { Segmented, TextInput } from '../components/ui/Form'
 import { DemoNotice } from '../components/ui/Primitives'
 import type { DemoSession } from '../types'
 import { BRAND } from '../config/brand'
-import { DEFAULT_DEMO_STUDENT_ID } from '../data/mock'
+import { DEFAULT_DEMO_STUDENT_ID, DEMO_COACH_ROLE } from '../data/mock'
+import { homePath } from '../lib/roles'
 import { useData, useSession, useToast } from '../store/contexts'
 
 const FEATURES = [
@@ -34,7 +35,7 @@ export function LoginPage() {
       notify('目前沒有學員可供示範，請先以教練身分新增學員', 'error')
       return
     }
-    signIn({ role, studentId: demoStudent?.id ?? DEFAULT_DEMO_STUDENT_ID })
+    signIn({ role: role === 'coach' ? DEMO_COACH_ROLE : 'student', studentId: demoStudent?.id ?? DEFAULT_DEMO_STUDENT_ID })
     navigate(role === 'coach' ? '/coach' : '/student', { replace: true })
   }
 
@@ -136,13 +137,21 @@ function RoleButton({ icon: Icon, title, text, onClick }: { icon: typeof Users; 
 
 type AuthTab = 'demo' | 'login' | 'register' | 'invite'
 
+const ACCOUNT_HINT = {
+  self: '自己記錄訓練、追蹤進步，不需要教練。',
+  coach: '一個人帶學員：管理學員、課表、訓練計畫與堂數。',
+  studio: '工作室經營者：自己也能帶學員，並邀請最多 2 位教練加入（共 3 位）。工作室的教練請向經營者索取邀請碼。',
+} as const
+
+const REGISTER_LABEL = { self: '建立帳號', coach: '建立教練帳號', studio: '建立工作室' } as const
+
 /** Backend-connected sign-in: demo accounts, email/password, sign-up (self-tracker or coach), student invite. */
 function ApiAuthPanel() {
   const { signIn } = useSession()
   const navigate = useNavigate()
   const notify = useToast()
   const [tab, setTab] = useState<AuthTab>('demo')
-  const [accountType, setAccountType] = useState<'self' | 'coach'>('self')
+  const [accountType, setAccountType] = useState<'self' | 'coach' | 'studio'>('self')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '', studio: '', code: '' })
@@ -157,7 +166,7 @@ function ApiAuthPanel() {
     try {
       const session = await task()
       signIn(session)
-      navigate(session.role === 'coach' ? '/coach' : '/student', { replace: true })
+      navigate(homePath(session.role), { replace: true })
       notify(`歡迎，${session.name ?? ''}`, 'info')
     } catch (e) {
       setError(e instanceof Error ? e.message : '登入失敗')
@@ -168,7 +177,7 @@ function ApiAuthPanel() {
 
   // Browser-only demo: never touches the server, so it works even when server demo mode is off.
   const enterDemo = (role: 'coach' | 'student') => {
-    if (!enterLocalDemo({ role, studentId: DEFAULT_DEMO_STUDENT_ID }, role === 'coach' ? '/coach' : '/student')) {
+    if (!enterLocalDemo({ role: role === 'coach' ? DEMO_COACH_ROLE : 'student', studentId: DEFAULT_DEMO_STUDENT_ID }, role === 'coach' ? '/coach' : '/student')) {
       setError('此瀏覽器無法儲存示範資料，請關閉無痕模式後再試')
     }
   }
@@ -184,6 +193,10 @@ function ApiAuthPanel() {
     if (settingPassword && form.confirm !== form.password) return // shown under the confirm field
     if (tab === 'login') void run(() => login(form.email, form.password))
     if (tab === 'register' && accountType === 'self') void run(() => registerSelf({ name: form.name, email: form.email, password: form.password }))
+    if (tab === 'register' && accountType === 'studio') {
+      if (!form.studio.trim()) return setError('請輸入工作室名稱')
+      void run(() => registerStudio({ name: form.name, email: form.email, password: form.password, studio: form.studio }))
+    }
     if (tab === 'register' && accountType === 'coach') void run(() => registerCoach({ name: form.name, email: form.email, password: form.password, studio: form.studio }))
     if (tab === 'invite') void run(() => activateInvite(form.code, form.password))
   }
@@ -231,18 +244,17 @@ function ApiAuthPanel() {
                   }}
                   options={[
                     { value: 'self', label: '自主訓練' },
-                    { value: 'coach', label: '教練' },
+                    { value: 'coach', label: '自由教練' },
+                    { value: 'studio', label: '工作室' },
                   ]}
                 />
-                <p className="mt-1.5 text-xs text-ink-500">
-                  {accountType === 'self' ? '自己記錄訓練、追蹤進步，不需要教練。' : '管理學員、課表與堂數。學員請向教練索取邀請碼。'}
-                </p>
+                <p className="mt-1.5 text-xs text-ink-500">{ACCOUNT_HINT[accountType]}</p>
               </div>
               <TextInput label="姓名" value={form.name} onChange={set('name')} autoComplete="name" />
             </>
           )}
           {tab === 'invite' ? (
-            <TextInput label="邀請碼" value={form.code} onChange={set('code')} placeholder="教練提供的 8 碼邀請碼" autoCapitalize="characters" />
+            <TextInput label="邀請碼" value={form.code} onChange={set('code')} placeholder="教練或工作室提供的 8 碼邀請碼" autoCapitalize="characters" />
           ) : (
             <TextInput label="Email" type="email" inputMode="email" value={form.email} onChange={set('email')} autoComplete="email" />
           )}
@@ -264,9 +276,11 @@ function ApiAuthPanel() {
               error={mismatch ? (form.confirm ? '兩次輸入的密碼不一致' : '請再次輸入密碼') : undefined}
             />
           )}
-          {tab === 'register' && accountType === 'coach' && <TextInput label="工作室名稱（選填）" value={form.studio} onChange={set('studio')} />}
+          {tab === 'register' && accountType !== 'self' && (
+            <TextInput label={accountType === 'studio' ? '工作室名稱' : '工作室名稱（選填）'} required={accountType === 'studio'} value={form.studio} onChange={set('studio')} />
+          )}
           <Button type="submit" size="lg" className="w-full" disabled={busy}>
-            {busy ? '處理中…' : tab === 'login' ? '登入' : tab === 'register' ? (accountType === 'self' ? '建立帳號' : '建立教練帳號') : '啟用學員帳號'}
+            {busy ? '處理中…' : tab === 'login' ? '登入' : tab === 'register' ? REGISTER_LABEL[accountType] : '啟用帳號'}
           </Button>
         </form>
       )}

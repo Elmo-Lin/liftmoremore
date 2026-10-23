@@ -1,11 +1,12 @@
 import { Compass } from 'lucide-react'
 import { ButtonLink } from '../components/ui/Button'
 import { EmptyState } from '../components/ui/Primitives'
+import { homePath } from '../lib/roles'
 import { useSession } from '../store/contexts'
 
 export function NotFoundPage() {
   const { session } = useSession()
-  const home = !session ? '/login' : session.role === 'coach' ? '/coach' : '/student'
+  const home = !session ? '/login' : homePath(session.role)
   return (
     <div className="flex min-h-dvh items-center justify-center bg-canvas">
       <EmptyState

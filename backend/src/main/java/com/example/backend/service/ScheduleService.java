@@ -15,6 +15,7 @@ import com.google.cloud.firestore.Query;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 
 /** Appointments (coach-managed calendar) and progress metrics such as bodyweight. */
@@ -32,7 +33,9 @@ public class ScheduleService {
     public List<AppointmentDto> listAppointments(CurrentUser user) {
         Query q = db.coachCol(user.coachId(), Db.APPOINTMENTS);
         if (user.isStudent()) q = q.whereEqualTo("studentId", user.userId());
+        Set<String> visible = user.isStudent() ? null : access.visibleStudentIds(user);
         return db.list(q, Appointment.class).stream()
+                .filter(a -> visible == null || visible.contains(a.studentId))
                 .sorted(Comparator.comparing((Appointment a) -> a.startAt))
                 .map(Mapper::appointment)
                 .toList();
@@ -43,19 +46,20 @@ public class ScheduleService {
         String status = in.status() == null ? "scheduled" : Domain.require(Domain.APPOINTMENT_STATUSES, in.status(), "status");
         Appointment a = new Appointment();
         a.id = Ids.orNew(id, "apt");
-        a.coachId = user.userId();
+        a.coachId = user.coachId();
         a.studentId = s.id;
         a.startAt = in.startAt();
         a.durationMin = in.durationMin();
         a.location = in.location().trim();
         a.status = status;
-        db.set(db.coachDoc(user.userId(), Db.APPOINTMENTS, a.id), a);
+        db.set(db.coachDoc(user.coachId(), Db.APPOINTMENTS, a.id), a);
         return Mapper.appointment(a);
     }
 
     public void deleteAppointment(CurrentUser user, String id) {
-        var ref = db.coachDoc(user.requireCoach().userId(), Db.APPOINTMENTS, id);
-        if (db.get(ref, Appointment.class).isEmpty()) throw ApiException.notFound("找不到此課程");
+        var ref = db.coachDoc(user.requireCoach().coachId(), Db.APPOINTMENTS, id);
+        Appointment a = db.get(ref, Appointment.class).orElseThrow(() -> ApiException.notFound("找不到此課程"));
+        access.student(user, a.studentId);
         db.delete(ref);
     }
 

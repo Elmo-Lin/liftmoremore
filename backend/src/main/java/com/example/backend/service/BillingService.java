@@ -88,33 +88,35 @@ public class BillingService {
     public PackageDto updatePackage(CurrentUser user, String packageId, PackageInput in) {
         user.requireCoach();
         validate(in);
-        DocumentReference ref = db.coachDoc(user.userId(), Db.PACKAGES, packageId);
+        DocumentReference ref = db.coachDoc(user.coachId(), Db.PACKAGES, packageId);
         return db.transaction(tx -> {
             SessionPackage p = tx.get(ref, SessionPackage.class).orElseThrow(BillingService::packageNotFound);
-            LedgerLock lock = lock(tx, user.userId(), p.studentId);
-            List<SessionTransaction> txs = tx.list(txQuery(user.userId(), p.studentId), SessionTransaction.class);
+            access.student(user, p.studentId);
+            LedgerLock lock = lock(tx, user.coachId(), p.studentId);
+            List<SessionTransaction> txs = tx.list(txQuery(user.coachId(), p.studentId), SessionTransaction.class);
             PackageBalance b = Ledger.of(p, txs);
             if (in.totalSessions() + b.adjusted() - b.used() < 0) {
                 throw ApiException.conflict("below_used", "此方案已使用 " + b.used() + " 堂，總堂數不可低於已使用數");
             }
             apply(p, in);
             tx.set(ref, p);
-            bump(tx, user.userId(), p.studentId, lock);
+            bump(tx, user.coachId(), p.studentId, lock);
             return Mapper.pkg(p);
         });
     }
 
     public void deletePackage(CurrentUser user, String packageId) {
         user.requireCoach();
-        DocumentReference ref = db.coachDoc(user.userId(), Db.PACKAGES, packageId);
+        DocumentReference ref = db.coachDoc(user.coachId(), Db.PACKAGES, packageId);
         db.transaction(tx -> {
             SessionPackage p = tx.get(ref, SessionPackage.class).orElseThrow(BillingService::packageNotFound);
-            LedgerLock lock = lock(tx, user.userId(), p.studentId);
-            boolean hasHistory = !tx.list(db.coachCol(user.userId(), Db.TRANSACTIONS).whereEqualTo("packageId", packageId).limit(1),
+            access.student(user, p.studentId);
+            LedgerLock lock = lock(tx, user.coachId(), p.studentId);
+            boolean hasHistory = !tx.list(db.coachCol(user.coachId(), Db.TRANSACTIONS).whereEqualTo("packageId", packageId).limit(1),
                     SessionTransaction.class).isEmpty();
             if (hasHistory) throw ApiException.conflict("has_transactions", "此方案已有異動紀錄，無法刪除");
             tx.delete(ref);
-            bump(tx, user.userId(), p.studentId, lock);
+            bump(tx, user.coachId(), p.studentId, lock);
             return null;
         });
     }
@@ -125,9 +127,10 @@ public class BillingService {
     public LedgerResult adjust(CurrentUser user, String packageId, AdjustmentInput in) {
         user.requireCoach();
         if (in.delta() == 0) throw ApiException.badRequest("調整數量需為非 0 的整數");
-        String coachId = user.userId();
+        String coachId = user.coachId();
         return db.transaction(tx -> {
             SessionPackage p = tx.get(db.coachDoc(coachId, Db.PACKAGES, packageId), SessionPackage.class).orElseThrow(BillingService::packageNotFound);
+            access.student(user, p.studentId);
             LedgerLock lock = lock(tx, coachId, p.studentId);
             List<SessionPackage> pkgs = tx.list(pkgQuery(coachId, p.studentId), SessionPackage.class);
             List<SessionTransaction> txs = new ArrayList<>(tx.list(txQuery(coachId, p.studentId), SessionTransaction.class));
@@ -146,10 +149,11 @@ public class BillingService {
     /** Deduct one session for a completed coached workout. Always an explicit, separate action. */
     public LedgerResult deduct(CurrentUser user, String workoutId, String transactionId) {
         user.requireCoach();
-        String coachId = user.userId();
+        String coachId = user.coachId();
         DocumentReference wref = db.coachDoc(coachId, Db.WORKOUTS, workoutId);
         return db.transaction(tx -> {
             Workout w = tx.get(wref, Workout.class).orElseThrow(() -> ApiException.notFound("找不到此訓練紀錄"));
+            access.student(user, w.studentId);
             LedgerLock lock = lock(tx, coachId, w.studentId);
             List<SessionPackage> pkgs = tx.list(pkgQuery(coachId, w.studentId), SessionPackage.class);
             List<SessionTransaction> txs = new ArrayList<>(tx.list(txQuery(coachId, w.studentId), SessionTransaction.class));
@@ -172,10 +176,11 @@ public class BillingService {
     /** Undo a deduction by appending a +1 reversal (history is preserved). */
     public LedgerResult reverse(CurrentUser user, String workoutId, String transactionId, String reason) {
         user.requireCoach();
-        String coachId = user.userId();
+        String coachId = user.coachId();
         DocumentReference wref = db.coachDoc(coachId, Db.WORKOUTS, workoutId);
         return db.transaction(tx -> {
             Workout w = tx.get(wref, Workout.class).orElseThrow(() -> ApiException.notFound("找不到此訓練紀錄"));
+            access.student(user, w.studentId);
             LedgerLock lock = lock(tx, coachId, w.studentId);
             List<SessionPackage> pkgs = tx.list(pkgQuery(coachId, w.studentId), SessionPackage.class);
             List<SessionTransaction> txs = new ArrayList<>(tx.list(txQuery(coachId, w.studentId), SessionTransaction.class));

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { GENDER_LABEL, GOAL_LABEL } from '../../lib/format'
 import { validateStudent, type StudentInput } from '../../store/actions'
-import { useData, useToast } from '../../store/contexts'
+import { useData, useSession, useToast } from '../../store/contexts'
+import { selectActiveCoaches } from '../../store/selectors'
 import type { Gender, Student, TrainingGoal } from '../../types'
 import { Button } from '../ui/Button'
 import { SelectInput, TextArea, TextInput } from '../ui/Form'
@@ -50,6 +51,10 @@ function StudentForm({ onClose, student, onSaved }: { onClose: () => void; stude
   )
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitted, setSubmitted] = useState(false)
+  // Studio owners choose who teaches a new student.
+  const { session } = useSession()
+  const coaches = session?.role === 'owner' && !student ? selectActiveCoaches(data) : []
+  const [coachId, setCoachId] = useState(data.coach.id)
 
   const set = <K extends keyof StudentInput>(k: K, v: StudentInput[K]) => {
     const next = { ...form, [k]: v }
@@ -63,7 +68,7 @@ function StudentForm({ onClose, student, onSaved }: { onClose: () => void; stude
     const errs = validateStudent(form, data.students.filter((s) => s.id !== student?.id))
     setErrors(errs)
     if (Object.keys(errs).length) return
-    const res = student ? actions.updateStudent(student.id, form) : actions.addStudent(form)
+    const res = student ? actions.updateStudent(student.id, form) : actions.addStudent(form, coachId)
     if (!res.ok) return notify(res.error, 'error')
     notify(student ? '學員資料已更新' : `已新增學員 ${res.value.name}`)
     onClose()
@@ -88,6 +93,16 @@ function StudentForm({ onClose, student, onSaved }: { onClose: () => void; stude
       }
     >
       <form id="student-form" onSubmit={submit} noValidate className="grid gap-4 sm:grid-cols-2">
+        {coaches.length > 1 && (
+          <SelectInput label="負責教練" containerClassName="sm:col-span-2" value={coachId} onChange={(e) => setCoachId(e.target.value)}>
+            {coaches.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {c.role === 'owner' ? '（我）' : ''}
+              </option>
+            ))}
+          </SelectInput>
+        )}
         <TextInput label="姓名" required value={form.name} maxLength={30} onChange={(e) => set('name', e.target.value)} error={errors.name} />
         <TextInput label="Email" required type="email" inputMode="email" value={form.email} onChange={(e) => set('email', e.target.value)} error={errors.email} />
         <TextInput label="電話" type="tel" inputMode="tel" placeholder="09xx-xxx-xxx" value={form.phone ?? ''} onChange={(e) => set('phone', e.target.value)} error={errors.phone} />

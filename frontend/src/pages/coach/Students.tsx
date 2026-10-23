@@ -8,8 +8,8 @@ import { Avatar, Badge, BalanceMeter, Card, EmptyState, PageHeader } from '../..
 import { GOAL_LABEL, relativeDay } from '../../lib/format'
 import { LOW_BALANCE_THRESHOLD } from '../../lib/sessions'
 import { workoutDate } from '../../lib/stats'
-import { useData } from '../../store/contexts'
-import { selectBalance, selectCompleted, selectPlan } from '../../store/selectors'
+import { useData, useSession } from '../../store/contexts'
+import { selectBalance, selectCoachName, selectCoachOf, selectCompleted, selectPlan } from '../../store/selectors'
 
 type StatusFilter = 'all' | 'active' | 'inactive'
 type SortKey = 'name' | 'balance' | 'recent'
@@ -21,13 +21,18 @@ export function StudentsPage() {
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<StatusFilter>('active')
   const [sort, setSort] = useState<SortKey>('recent')
+  const [coachFilter, setCoachFilter] = useState('all')
   const adding = params.get('new') === '1'
+  // Studio owners see every coach's students: show who teaches whom and let them filter by coach.
+  const { session } = useSession()
+  const showCoach = session?.role === 'owner' && (data.studio?.coaches.length ?? 0) > 1
 
   const rows = useMemo(() => {
     const term = q.trim().toLowerCase()
     const digits = term.replace(/\D/g, '')
     return data.students
       .filter((s) => status === 'all' || s.status === status)
+      .filter((s) => coachFilter === 'all' || selectCoachOf(data, s.id) === coachFilter)
       .filter(
         (s) =>
           !term ||
@@ -45,7 +50,7 @@ export function StudentsPage() {
         if (sort === 'balance') return a.balance.remaining - b.balance.remaining
         return (b.last ?? '').localeCompare(a.last ?? '')
       })
-  }, [data, q, status, sort])
+  }, [data, q, status, sort, coachFilter])
 
   const counts = {
     all: data.students.length,
@@ -87,6 +92,17 @@ export function StudentsPage() {
               { value: 'all', label: '全部' },
             ]}
           />
+          {showCoach && (
+            <ToolbarSelect label="教練" value={coachFilter} onChange={(e) => setCoachFilter(e.target.value)}>
+              <option value="all">所有教練</option>
+              {data.studio!.coaches.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.status === 'inactive' ? '（已停用）' : ''}
+                </option>
+              ))}
+            </ToolbarSelect>
+          )}
           <ToolbarSelect label="排序" value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
             <option value="recent">最近訓練</option>
             <option value="balance">剩餘堂數</option>
@@ -136,7 +152,10 @@ export function StudentsPage() {
                             {s.name}
                             {s.status === 'inactive' && <Badge>暫停</Badge>}
                           </span>
-                          <span className="text-xs text-ink-500">{s.phone || s.email}</span>
+                          <span className="text-xs text-ink-500">
+                            {s.phone || s.email}
+                            {showCoach && `・${selectCoachName(data, selectCoachOf(data, s.id))}`}
+                          </span>
                         </span>
                       </Link>
                     </td>
@@ -175,6 +194,7 @@ export function StudentsPage() {
                     {s.status === 'inactive' && <Badge>暫停</Badge>}
                   </p>
                   <p className="truncate text-xs text-ink-500">
+                    {showCoach && `${selectCoachName(data, selectCoachOf(data, s.id))}・`}
                     {GOAL_LABEL[s.goal]}・上次 {last ? relativeDay(last) : '尚無'}
                   </p>
                 </div>

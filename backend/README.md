@@ -38,19 +38,26 @@ http://localhost:4000/firestore.
 ## Firestore layout
 
 ```
-users/{userId}          login identity: role, passwordHash (bcrypt), coachId
+users/{userId}          login identity: role, passwordHash (bcrypt), coachId (= workspace), active
 emails/{email}          {userId} — guarantees unique email (written in the same transaction)
-invites/{code}          one-time student invite (14 days)
+invites/{code}          one-time invite for a student or a studio coach (14 days)
 exercises/{id}          shared catalog, seeded on startup
-coaches/{coachId}       coach profile; everything the coach owns is a subcollection:
+coaches/{coachId}       workspace (kind: solo / studio / self, maxCoaches); everything in it is a subcollection:
   students/  plans/  workouts/  packages/  transactions/  metrics/  appointments/
   ledgers/{studentId}   lock token for ledger writes (not a balance)
 ```
 
-- Roles: `coach`, `student` (invited by a coach) and `self` (a self-tracker with no coach).
-  A self-tracker gets `coaches/{id}` as their own one-person space, holding a single
-  `students/{id}` with the same ID, so they reuse the student-scoped rules: they log
-  independent workouts only and cannot bill, plan or manage students.
+- Roles: `coach` (a free coach, or a coach in a studio), `owner` (runs a studio and also teaches),
+  `student` (invited by a coach) and `self` (a self-tracker with no coach).
+- A **workspace** is `coaches/{id}`. A free coach's has their own ID; a studio's has its owner's
+  ID, so a free coach upgrades to a studio in place. A self-tracker gets a one-person workspace
+  holding a single `students/{id}` with the same ID.
+- **Studios**: the owner invites coaches (`maxCoaches` seats, owner included, default 3). Coaches
+  join with an invite code, never by signing up. Students belong to the studio:
+  `students/{id}.assignedCoachId` is the coach who teaches them (absent = the owner), so the owner
+  can hand a student, with all their history, to another coach. Studio coaches see only their own
+  students (plans are shared); the owner sees everything. A deactivated coach's token stops
+  working on the next request.
 - Plans embed their days and prescriptions; workouts embed exercises and sets.
 - Timestamps are native Firestore Timestamps.
 - Queries filter by a single field and sort in memory, so **no composite indexes** are needed.
@@ -128,8 +135,14 @@ All routes are under `/api`, return JSON, and except auth/health/demo need
 |---|---|---|---|
 | POST | `/auth/register` | public | Coach sign-up → token |
 | POST | `/auth/register-self` | public | Self-tracker sign-up (no coach) → token |
+| POST | `/auth/register-studio` | public | Studio owner sign-up → token |
 | POST | `/auth/login` | public | Email + password → token |
-| POST | `/auth/activate` | public | Student sets password with invite code → token |
+| POST | `/auth/activate` | public | Student or studio coach sets password with invite code → token |
+| POST | `/studio/upgrade` | free coach | Become a studio owner in place → new token |
+| POST | `/studio/coaches` | owner | Invite a coach (uses a seat) → invite code |
+| POST | `/studio/coaches/{id}/invite` | owner | New code for a coach who has not activated |
+| POST | `/studio/coaches/{id}/deactivate` | owner | `{transferTo}` takes their students; frees the seat |
+| PUT | `/students/{id}/coach` | owner | Hand a student to another active coach |
 | GET | `/auth/me` | any | Current user |
 | GET | `/bootstrap` | any | Everything the caller may see (frontend `AppData` shape) |
 | GET | `/exercises` | any | Exercise catalog |

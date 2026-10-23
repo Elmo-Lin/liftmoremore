@@ -5,7 +5,7 @@ import { ScrollToTop } from './components/layout/ScrollToTop'
 import { LoginPage } from './pages/Login'
 import { NotFoundPage } from './pages/NotFound'
 import { useData, useSession } from './store/contexts'
-import type { Role } from './types'
+import { homePath, isCoachRole } from './lib/roles'
 
 const CoachAnalyticsPage = lazy(() => import('./pages/coach/Analytics').then((m) => ({ default: m.CoachAnalyticsPage })))
 const CoachDashboardPage = lazy(() => import('./pages/coach/Dashboard').then((m) => ({ default: m.CoachDashboardPage })))
@@ -13,6 +13,7 @@ const PlanEditorPage = lazy(() => import('./pages/coach/PlanEditor').then((m) =>
 const PlansPage = lazy(() => import('./pages/coach/Plans').then((m) => ({ default: m.PlansPage })))
 const StudentDetailPage = lazy(() => import('./pages/coach/StudentDetail').then((m) => ({ default: m.StudentDetailPage })))
 const StudentsPage = lazy(() => import('./pages/coach/Students').then((m) => ({ default: m.StudentsPage })))
+const StudioPage = lazy(() => import('./pages/coach/Studio').then((m) => ({ default: m.StudioPage })))
 const CoachSchedulePage = lazy(() => import('./pages/coach/Schedule').then((m) => ({ default: m.CoachSchedulePage })))
 const CoachWorkoutLoggerPage = lazy(() => import('./pages/coach/WorkoutLogger').then((m) => ({ default: m.CoachWorkoutLoggerPage })))
 const StudentDashboardPage = lazy(() => import('./pages/student/Dashboard').then((m) => ({ default: m.StudentDashboardPage })))
@@ -21,13 +22,13 @@ const StudentPlanPage = lazy(() => import('./pages/student/Plan').then((m) => ({
 const StudentProgressPage = lazy(() => import('./pages/student/Progress').then((m) => ({ default: m.StudentProgressPage })))
 const StudentWorkoutPage = lazy(() => import('./pages/student/Workout').then((m) => ({ default: m.StudentWorkoutPage })))
 
-function RequireRole({ role, children }: { role: Exclude<Role, 'self'>; children: ReactNode }) {
+function RequireRole({ role, children }: { role: 'coach' | 'student'; children: ReactNode }) {
   const { session } = useSession()
   const { data } = useData()
   const location = useLocation()
   if (!session) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   // Self-trackers share the student area.
-  if ((session.role === 'coach' ? 'coach' : 'student') !== role) return <Navigate to={session.role === 'coach' ? '/coach' : '/student'} replace />
+  if ((isCoachRole(session.role) ? 'coach' : 'student') !== role) return <Navigate to={homePath(session.role)} replace />
   if (role === 'student' && !data.students.some((s) => s.id === session.studentId)) {
     return <Navigate to="/login" replace state={{ missingStudent: true }} />
   }
@@ -37,7 +38,7 @@ function RequireRole({ role, children }: { role: Exclude<Role, 'self'>; children
 function HomeRedirect() {
   const { session } = useSession()
   if (!session) return <Navigate to="/login" replace />
-  return <Navigate to={session.role === 'coach' ? '/coach' : '/student'} replace />
+  return <Navigate to={homePath(session.role)} replace />
 }
 
 export default function App() {
@@ -63,6 +64,7 @@ export default function App() {
           <Route path="plans" element={<PlansPage />} />
           <Route path="plans/:id" element={<PlanEditorPage />} />
           <Route path="analytics" element={<CoachAnalyticsPage />} />
+          <Route path="studio" element={<StudioPage />} />
         </Route>
         <Route
           path="/student"
