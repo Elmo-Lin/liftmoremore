@@ -55,6 +55,10 @@ export function BillingPage() {
     if (result === 'success') {
       notify('付款完成，方案已更新')
       refreshSession(token).then(signIn, () => void reload())
+    } else if (result === 'pending') {
+      // NewebPay's server notification decides; it usually lands within seconds.
+      notify('付款結果確認中，稍後會自動更新', 'info')
+      window.setTimeout(() => refreshSession(token).then(signIn, () => void reload()), 4000)
     } else {
       notify('付款未完成，方案沒有變更', 'error')
     }

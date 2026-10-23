@@ -23,6 +23,18 @@ class NewebPayTest {
     }
 
     @Test
+    void readsTheStringFormAndToleratesStrayBytes() throws Exception {
+        JsonNode form = specSample.parse("Status=SUCCESS&Message=%E6%8E%88%E6%AC%8A%E6%88%90%E5%8A%9F&MerchantID=TEK1682407426&Amt=99&MerchantOrderNo=LM1");
+        assertThat(form.path("Status").asString()).isEqualTo("SUCCESS");
+        assertThat(form.path("Message").asString()).isEqualTo("授權成功");
+        assertThat(form.path("Result").path("Amt").asInt()).isEqualTo(99);
+        assertThat(specSample.isOurs(form.path("Result"))).isTrue();
+
+        JsonNode trailing = specSample.parse("{\"Status\":\"SUCCESS\",\"Result\":{\"Amt\":99}}\u0003\u0003 ");
+        assertThat(trailing.path("Result").path("Amt").asInt()).isEqualTo(99);
+    }
+
+    @Test
     void encryptionRoundTrips() throws Exception {
         String plain = "RespondType=JSON&ProdDesc=" + java.net.URLEncoder.encode("自由教練 Pro 月費", "UTF-8");
         assertThat(specSample.decrypt(specSample.encrypt(plain))).isEqualTo(plain);

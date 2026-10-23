@@ -354,8 +354,9 @@ public class SubscriptionService {
     }
 
     /** Where the browser lands after NewebPay. */
-    public String returnUrl(boolean ok) {
-        return appUrl + "/coach/billing?result=" + (ok ? "success" : "failed");
+    /** {@code result}: success, failed, or pending (unknown yet; the server notification decides). */
+    public String returnUrl(String result) {
+        return appUrl + "/coach/billing?result=" + result;
     }
 
     // ----------------------------------------------------------------------------- helpers

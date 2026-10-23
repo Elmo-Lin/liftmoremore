@@ -252,6 +252,11 @@ class BillingFlowTests {
         assertThat(billing(coach).get("studentLimit").asInt()).isEqualTo(50);
         verify(newebPay).alterAmount(anyString(), eq(periodNo), eq(399 + 2 * 99), any());
 
+        // A return we cannot read (here: a payload of the wrong shape) leaves the outcome to the server notification.
+        String unreadable = newebPay.encrypt("not a payload");
+        assertThat(form("/api/billing/newebpay/mpg-return", Map.of("TradeInfo", unreadable, "TradeSha", newebPay.tradeSha(unreadable))).location())
+                .endsWith("result=pending");
+
         Map<String, String> forged = new HashMap<>(notify);
         forged.put("TradeSha", "0".repeat(64));
         assertThat(form("/api/billing/newebpay/mpg-notify", forged).status()).isEqualTo(400);

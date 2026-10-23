@@ -2,6 +2,7 @@ package com.example.backend.billing;
 
 import com.example.backend.common.ApiException;
 import java.net.URI;
+import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -18,6 +19,8 @@ import java.util.stream.Collectors;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -37,6 +40,8 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @Component
 public class NewebPay {
+
+    private static final Logger log = LoggerFactory.getLogger(NewebPay.class);
 
     static final String PERIOD_VERSION = "1.5";
     static final String ALTER_STATUS_VERSION = "1.0";
@@ -177,11 +182,42 @@ public class NewebPay {
 
     /** Decrypts a callback payload (定期定額 {@code Period}, or MPG {@code TradeInfo}). */
     public JsonNode decryptJson(String hex) {
+        String plain;
         try {
-            return json.readTree(decrypt(hex));
+            plain = decrypt(hex);
         } catch (Exception e) {
             throw ApiException.badRequest("無法解析金流通知");
         }
+        try {
+            return parse(plain);
+        } catch (Exception e) {
+            // Never log the content (it holds payment details); its shape is enough to diagnose.
+            log.error("NewebPay payload could not be parsed: {} chars, starts with '{}', ends with bytes {}", plain.length(),
+                    plain.isEmpty() ? "" : plain.substring(0, 1), HexFormat.of().formatHex(plain.substring(Math.max(0, plain.length() - 8)).getBytes(StandardCharsets.UTF_8)), e);
+            throw ApiException.badRequest("無法解析金流通知");
+        }
+    }
+
+    /**
+     * A decrypted payload: JSON (RespondType=JSON), possibly followed by stray bytes, or the
+     * {@code Status=…&Message=…&…} form NewebPay can send instead; the latter is reshaped into
+     * the JSON layout ({@code Status}, {@code Message}, {@code Result{…}}).
+     */
+    JsonNode parse(String plain) throws Exception {
+        String text = plain.strip();
+        if (text.startsWith("{")) return json.readTree(text.substring(0, text.lastIndexOf('}') + 1));
+        Map<String, String> fields = new LinkedHashMap<>();
+        for (String pair : text.split("&")) {
+            String[] kv = pair.split("=", 2);
+            if (kv[0].isEmpty()) continue;
+            fields.put(URLDecoder.decode(kv[0], StandardCharsets.UTF_8), kv.length > 1 ? URLDecoder.decode(kv[1], StandardCharsets.UTF_8) : "");
+        }
+        if (!fields.containsKey("Status")) throw new IllegalArgumentException("not a NewebPay payload");
+        Map<String, Object> shaped = new LinkedHashMap<>();
+        shaped.put("Status", fields.remove("Status"));
+        shaped.put("Message", fields.remove("Message"));
+        shaped.put("Result", fields);
+        return json.valueToTree(shaped);
     }
 
     /** Verifies an MPG callback's TradeSha, then decrypts it. */

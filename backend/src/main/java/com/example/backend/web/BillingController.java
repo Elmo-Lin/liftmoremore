@@ -83,17 +83,20 @@ public class BillingController {
         return "OK";
     }
 
-    /** The shopper always lands back in the app, even if processing the result failed. */
-    private static boolean safely(java.util.function.BooleanSupplier handle) {
+    /**
+     * The shopper always lands back in the app. If this copy of the result cannot be read, the
+     * outcome is left to NewebPay's server notification ("pending"), never reported as a failure.
+     */
+    private static String safely(java.util.function.BooleanSupplier handle) {
         try {
-            return handle.getAsBoolean();
+            return handle.getAsBoolean() ? "success" : "failed";
         } catch (Exception e) {
             log.error("NewebPay return could not be processed", e);
-            return false;
+            return "pending";
         }
     }
 
-    private ResponseEntity<Void> redirect(boolean ok) {
-        return ResponseEntity.status(HttpStatus.SEE_OTHER).location(URI.create(subscriptions.returnUrl(ok))).build();
+    private ResponseEntity<Void> redirect(String result) {
+        return ResponseEntity.status(HttpStatus.SEE_OTHER).location(URI.create(subscriptions.returnUrl(result))).build();
     }
 }
