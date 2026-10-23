@@ -237,9 +237,39 @@ export interface Studio {
   kind: 'solo' | 'studio' | 'self'
   name?: string
   ownerId: ID
-  /** Seats for coaches, the owner included. */
+  /** Seats for coaches, the owner included (from the plan in API mode). */
   maxCoaches?: number
   coaches: CoachMember[]
+}
+
+export type PlanId = 'pro' | 'team'
+/** expired: the trial or paid period lapsed; the workspace is read-only until someone subscribes. */
+export type BillingStatus = 'trialing' | 'active' | 'past_due' | 'canceled' | 'expired'
+
+/** API mode, coaches of a coaching workspace: the plan, its limits, and whether writes are allowed. */
+export interface Billing {
+  plan: PlanId
+  status: BillingStatus
+  writable: boolean
+  /** Free coaches and studio owners pay; studio coaches only see the status. */
+  canManage: boolean
+  trialEndsAt: ISODate
+  currentPeriodEnd?: ISODate
+  extraStudentPacks: number
+  extraCoachSeats: number
+  /** Downgrades that take effect at the next renewal. */
+  nextExtraStudentPacks?: number
+  nextExtraCoachSeats?: number
+  monthlyAmount: number
+  studentLimit: number
+  coachLimit: number
+  /** The whole workspace's active students. */
+  activeStudents: number
+  /** Active students the caller cannot see (a studio coach sees only their own). */
+  hiddenActiveStudents: number
+  /** A NewebPay monthly mandate is running. */
+  subscribed: boolean
+  paymentsEnabled: boolean
 }
 
 export interface AppData {
@@ -257,6 +287,8 @@ export interface AppData {
   appointments: Appointment[]
   /** Coaches only. Who teaches a student is relationships[].coachId. */
   studio?: Studio | null
+  /** API mode, coaches only (absent in the offline demo and for self-trackers: no limits). */
+  billing?: Billing | null
 }
 
 export interface DemoSession {

@@ -1,6 +1,7 @@
 package com.example.backend.service;
 
 import com.example.backend.auth.CurrentUser;
+import com.example.backend.billing.SubscriptionService;
 import com.example.backend.common.ApiException;
 import com.example.backend.domain.Appointment;
 import com.example.backend.domain.Coach;
@@ -40,17 +41,20 @@ public class BootstrapService {
     private final ExerciseCatalog catalog;
     private final AccessService access;
     private final StudioService studios;
+    private final SubscriptionService subscriptions;
 
-    public BootstrapService(Db db, ExerciseCatalog catalog, AccessService access, StudioService studios) {
+    public BootstrapService(Db db, ExerciseCatalog catalog, AccessService access, StudioService studios, SubscriptionService subscriptions) {
         this.db = db;
         this.catalog = catalog;
         this.access = access;
         this.studios = studios;
+        this.subscriptions = subscriptions;
     }
 
     public AppDataDto load(CurrentUser user) {
         String coachId = user.coachId();
-        Coach space = db.get(db.doc(Db.COACHES, coachId), Coach.class).orElseThrow(() -> ApiException.notFound("找不到教練資料"));
+        Coach space = subscriptions.startTrialIfMissing(
+                db.get(db.doc(Db.COACHES, coachId), Coach.class).orElseThrow(() -> ApiException.notFound("找不到教練資料")));
         boolean asCoach = user.isCoach();
 
         // Fire all reads at once, then collect.
@@ -62,7 +66,8 @@ public class BootstrapService {
         ApiFuture<QuerySnapshot> appointments = scoped(coachId, Db.APPOINTMENTS, user, "studentId");
         ApiFuture<QuerySnapshot> plans = asCoach ? db.coachCol(coachId, Db.PLANS).get() : null;
 
-        List<Student> roster = decode(students, Student.class).stream().filter(s -> access.canSee(user, s)).toList();
+        List<Student> all = decode(students, Student.class);
+        List<Student> roster = all.stream().filter(s -> access.canSee(user, s)).toList();
         if (!asCoach && roster.isEmpty()) throw ApiException.notFound("找不到學員資料");
         Set<String> visible = roster.stream().map(s -> s.id).collect(Collectors.toSet());
         // The profile shown as "the coach": yourself as a coach, your responsible coach as a student.
@@ -85,7 +90,12 @@ public class BootstrapService {
                 mine(decode(transactions, SessionTransaction.class), visible, x -> x.studentId).stream().map(Mapper::tx).toList(),
                 mine(decode(metrics, ProgressMetric.class), visible, x -> x.studentId).stream().map(Mapper::metric).toList(),
                 mine(decode(appointments, Appointment.class), visible, x -> x.studentId).stream().sorted(Comparator.comparing((Appointment a) -> a.startAt)).map(Mapper::appointment).toList(),
-                studios.studio(user, space));
+                studios.studio(user, space),
+                asCoach ? subscriptions.view(user, space, activeCount(all), activeCount(all) - activeCount(roster)) : null);
+    }
+
+    private static int activeCount(List<Student> students) {
+        return (int) students.stream().filter(s -> "active".equals(s.status)).count();
     }
 
     private static <T> List<T> mine(List<T> all, Set<String> visible, Function<T, String> studentOf) {

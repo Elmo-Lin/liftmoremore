@@ -18,7 +18,6 @@ public final class Domain {
     public static final String SPACE_SOLO = "solo";
     public static final String SPACE_STUDIO = "studio";
     public static final String SPACE_SELF = "self";
-    public static final int DEFAULT_STUDIO_SEATS = 3;
 
     public static final Set<String> GOALS = Set.of("strength", "hypertrophy", "fatLoss", "general", "powerlifting", "mobility");
     public static final Set<String> GENDERS = Set.of("female", "male", "other");

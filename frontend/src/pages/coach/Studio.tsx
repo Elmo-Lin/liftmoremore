@@ -3,13 +3,14 @@ import { useState } from 'react'
 import { Link, Navigate } from 'react-router'
 import { isApiMode } from '../../api/client'
 import { inviteCoach, reinviteCoach, upgradeToStudio, type CoachInvite } from '../../api/studio'
-import { Button } from '../../components/ui/Button'
+import { Button, ButtonLink } from '../../components/ui/Button'
 import { SelectInput, TextInput } from '../../components/ui/Form'
 import { Modal } from '../../components/ui/Modal'
 import { PageLoading } from '../../components/ui/PageLoading'
 import { Avatar, Badge, Card, CardHeader, DemoNotice, PageHeader, Stat } from '../../components/ui/Primitives'
 import { BRAND } from '../../config/brand'
-import { formatDate } from '../../lib/format'
+import { PLANS } from '../../lib/billing'
+import { formatDate, twd } from '../../lib/format'
 import { LOW_BALANCE_THRESHOLD } from '../../lib/sessions'
 import { coachStats } from '../../lib/studio'
 import { seatsOf, seatsUsed } from '../../store/actions'
@@ -61,7 +62,9 @@ function UpgradeToStudio() {
       <Card className="p-5">
         <ul className="space-y-2.5 text-sm text-ink-700">
           {[
-            '邀請最多 2 位教練加入（含你共 3 位），每位教練的功能和你現在一樣',
+            data.billing
+              ? `工作室 Team 方案 ${twd(PLANS.team.price)}/月：含 ${PLANS.team.coaches} 位教練（含你）、${PLANS.team.students} 位活躍學員，可再加購`
+              : '邀請最多 2 位教練加入（含你共 3 位），每位教練的功能和你現在一樣',
             '你可以看到所有教練的學員、課表與訓練紀錄',
             '學員屬於工作室：教練離開時可以把學員轉給其他教練，紀錄與堂數都保留',
             '訓練計畫在工作室內共用',
@@ -73,13 +76,23 @@ function UpgradeToStudio() {
             </li>
           ))}
         </ul>
-        <form onSubmit={upgrade} className="mt-5 space-y-3 border-t border-line pt-5">
-          <TextInput label="工作室名稱" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
-          <Button type="submit" icon={Building2} className="h-11 w-full md:h-10" disabled={busy || !isApiMode}>
-            {busy ? '處理中…' : '升級為工作室'}
-          </Button>
-          {!isApiMode && <p className="text-center text-xs text-ink-500">示範模式無法升級。可從「切換示範身分」改看「經營者」，體驗工作室的功能。</p>}
-        </form>
+        {data.billing?.subscribed ? (
+          <div className="mt-5 space-y-2 border-t border-line pt-5">
+            <ButtonLink to="/coach/billing" icon={Building2} className="h-11 w-full md:h-10">
+              前往「方案與付款」升級
+            </ButtonLink>
+            <p className="text-center text-xs text-ink-500">訂閱中升級：本期按剩餘天數補差額，付款後立即生效。</p>
+          </div>
+        ) : (
+          <form onSubmit={upgrade} className="mt-5 space-y-3 border-t border-line pt-5">
+            <TextInput label="工作室名稱" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
+            <Button type="submit" icon={Building2} className="h-11 w-full md:h-10" disabled={busy || !isApiMode}>
+              {busy ? '處理中…' : '升級為工作室'}
+            </Button>
+            {!isApiMode && <p className="text-center text-xs text-ink-500">示範模式無法升級。可從「切換示範身分」改看「經營者」，體驗工作室的功能。</p>}
+            {data.billing?.status === 'trialing' && <p className="text-center text-xs text-ink-500">試用期間升級免費，試用結束後依 Team 方案計費。</p>}
+          </form>
+        )}
       </Card>
     </div>
   )
@@ -111,7 +124,20 @@ function ManageStudio() {
           </Button>
         }
       />
-      {used >= seats && <p className="-mt-2 mb-4 text-[13px] text-ink-500">名額已滿。停用一位教練即可釋出名額。</p>}
+      {used >= seats && (
+        <p className="-mt-2 mb-4 text-[13px] text-ink-500">
+          名額已滿。停用一位教練即可釋出名額
+          {data.billing?.canManage && (
+            <>
+              ，或
+              <Link to="/coach/billing" className="font-medium text-accent-700 hover:underline">
+                加購教練名額
+              </Link>
+            </>
+          )}
+          。
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="教練" value={active.length} unit="位" icon={Users} sub={`含經營者・名額 ${seats} 位`} to="#coaches" />

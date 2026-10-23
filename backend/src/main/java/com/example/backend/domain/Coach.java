@@ -11,12 +11,12 @@ public class Coach {
     public String id;
     /** {@link com.example.backend.common.Domain#SPACE_SOLO} (also when null, for older data), studio or self. */
     public String kind;
-    /** Studios: how many coaches (owner included) may be active or invited at once. */
-    public Integer maxCoaches;
     public String name;
     public String email;
     public String phone;
     public String title;
     public String studio;
+    /** Coaching workspaces only; null until it changes (the trial then counts from {@link #createdAt}). */
+    public Subscription subscription;
     public Instant createdAt;
 }

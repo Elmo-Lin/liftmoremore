@@ -24,8 +24,9 @@ import org.springframework.stereotype.Component;
  * emails/{emailLower}       {userId} — enforces unique email
  * invites/{code}            one-time student invite
  * exercises/{id}            shared catalog
- * coaches/{coachId}         coach profile, with subcollections:
- *   students | plans | workouts | packages | transactions | metrics | appointments | ledgers
+ * billingOrders/{orderNo}   one NewebPay checkout (found by order number in payment callbacks)
+ * coaches/{coachId}         workspace (with its subscription), with subcollections:
+ *   students | plans | workouts | packages | transactions | metrics | appointments | ledgers | payments
  * </pre>
  * Everything a coach owns lives under their document, so tenancy is structural.
  */
@@ -37,6 +38,7 @@ public class Db {
     public static final String INVITES = "invites";
     public static final String EXERCISES = "exercises";
     public static final String COACHES = "coaches";
+    public static final String BILLING_ORDERS = "billingOrders";
 
     public static final String STUDENTS = "students";
     public static final String PLANS = "plans";
@@ -46,9 +48,10 @@ public class Db {
     public static final String METRICS = "metrics";
     public static final String APPOINTMENTS = "appointments";
     public static final String LEDGERS = "ledgers";
+    public static final String PAYMENTS = "payments";
 
     public static final List<String> COACH_SUBCOLLECTIONS =
-            List.of(STUDENTS, PLANS, WORKOUTS, PACKAGES, TRANSACTIONS, METRICS, APPOINTMENTS, LEDGERS);
+            List.of(STUDENTS, PLANS, WORKOUTS, PACKAGES, TRANSACTIONS, METRICS, APPOINTMENTS, LEDGERS, PAYMENTS);
 
     public final Firestore fs;
     private final DocCodec codec;

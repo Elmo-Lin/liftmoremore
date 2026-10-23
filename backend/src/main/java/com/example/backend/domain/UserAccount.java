@@ -14,6 +14,8 @@ public class UserAccount {
     public String email;
     public String phone;
     public String passwordHash;
+    /** Google account ID ({@code sub}) once the user has signed in with Google. */
+    public String googleSub;
     /** Workspace this account belongs to: the coach's own ID for free coaches and studio owners. */
     public String coachId;
     /** Coaches: shown on their profile (the workspace's title is used for the owner of older data). */
@@ -25,6 +27,11 @@ public class UserAccount {
     /** Coaches: quick-select options when adding a session package; null until they customize (the UI shows defaults). */
     public List<PackagePreset> packagePresets;
     public Instant createdAt;
+
+    /** Whether the user can sign in yet (a password, or Google). Invited users have neither until they activate. */
+    public boolean hasLogin() {
+        return passwordHash != null || googleSub != null;
+    }
 
     public static class PackagePreset {
         public String name;

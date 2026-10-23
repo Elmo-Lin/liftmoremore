@@ -2,6 +2,8 @@ package com.example.backend.service;
 
 import com.example.backend.auth.AuthService;
 import com.example.backend.auth.CurrentUser;
+import com.example.backend.billing.Plans;
+import com.example.backend.billing.SubscriptionService;
 import com.example.backend.common.ApiException;
 import com.example.backend.common.Domain;
 import com.example.backend.common.Ids;
@@ -22,6 +24,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 /**
@@ -37,11 +40,13 @@ public class StudioService {
     private final Db db;
     private final AuthService auth;
     private final AccessService access;
+    private final SubscriptionService subscriptions;
 
-    public StudioService(Db db, AuthService auth, AccessService access) {
+    public StudioService(Db db, AuthService auth, AccessService access, SubscriptionService subscriptions) {
         this.db = db;
         this.auth = auth;
         this.access = access;
+        this.subscriptions = subscriptions;
     }
 
     // ----------------------------------------------------------------------------- reads
@@ -58,7 +63,8 @@ public class StudioService {
     public StudioDto studio(CurrentUser user, Coach space) {
         if (!user.isCoach()) return null;
         List<CoachMemberDto> coaches = members(space.id).stream().map(u -> member(u, user.isOwner())).toList();
-        return new StudioDto(space.id, kindOf(space), space.studio, space.id, space.maxCoaches, coaches);
+        Plans.Access plan = Plans.access(space, Instant.now());
+        return new StudioDto(space.id, kindOf(space), space.studio, space.id, plan == null ? null : plan.coachLimit(), coaches);
     }
 
     /**
@@ -85,8 +91,11 @@ public class StudioService {
         db.transaction(tx -> {
             var spaceRef = db.doc(Db.COACHES, user.coachId());
             Coach space = tx.get(spaceRef, Coach.class).orElseThrow(() -> ApiException.notFound("找不到教練資料"));
+            // A paying coach upgrades through billing, which charges the prorated difference first.
+            if (SubscriptionService.hasMandate(space.subscription)) {
+                throw new ApiException(HttpStatus.PAYMENT_REQUIRED, "upgrade_via_billing", "訂閱中的帳號請至「方案與付款」升級為工作室方案");
+            }
             space.kind = Domain.SPACE_STUDIO;
-            space.maxCoaches = Domain.DEFAULT_STUDIO_SEATS;
             space.studio = studioName.trim();
             tx.set(spaceRef, space);
             tx.update(db.doc(Db.USERS, user.userId()), "role", Domain.OWNER);
@@ -99,10 +108,7 @@ public class StudioService {
     public CoachInviteDto inviteCoach(CurrentUser user, InviteCoachInput in) {
         user.requireOwner();
         String spaceId = user.coachId();
-        Coach space = db.get(db.doc(Db.COACHES, spaceId), Coach.class).orElseThrow(() -> ApiException.notFound("找不到工作室"));
-        long used = members(spaceId).stream().filter(u -> !Boolean.FALSE.equals(u.active)).count();
-        int seats = space.maxCoaches != null ? space.maxCoaches : Domain.DEFAULT_STUDIO_SEATS;
-        if (used >= seats) throw ApiException.conflict("seats_full", "教練名額已滿（" + seats + " 位，含經營者）");
+        subscriptions.requireCoachSeat(spaceId, members(spaceId).stream().filter(u -> !Boolean.FALSE.equals(u.active)).count());
 
         String email = in.email().trim();
         UserAccount coach = new UserAccount();
@@ -127,7 +133,7 @@ public class StudioService {
     /** New code for a coach who has not activated yet (the old one stops working). */
     public CoachInviteDto reinvite(CurrentUser user, String coachId) {
         UserAccount coach = memberOf(user.requireOwner(), coachId);
-        if (coach.passwordHash != null) throw ApiException.conflict("already_active", "此教練已啟用帳號");
+        if (coach.hasLogin()) throw ApiException.conflict("already_active", "此教練已啟用帳號");
         Invite invite = issueInvite(user.coachId(), coach);
         return new CoachInviteDto(member(coach, true), invite.code, invite.expiresAt);
     }
@@ -148,7 +154,7 @@ public class StudioService {
             for (Student s : theirs) db.update(db.coachDoc(user.coachId(), Db.STUDENTS, s.id), "assignedCoachId", assignedValue(user, target));
         }
         if (coach.inviteCode != null) db.delete(db.doc(Db.INVITES, coach.inviteCode));
-        if (coach.passwordHash == null) {
+        if (!coach.hasLogin()) {
             db.delete(db.doc(Db.EMAILS, StudentService.key(coach.email)));
             db.delete(db.doc(Db.USERS, coach.id));
         } else {
@@ -174,7 +180,7 @@ public class StudioService {
     /** A coach who can take students: the owner, or a studio coach who activated and is not deactivated. */
     private UserAccount activeCoach(CurrentUser user, String coachId) {
         UserAccount u = memberOf(user, coachId);
-        if (u.passwordHash == null || Boolean.FALSE.equals(u.active)) throw ApiException.badRequest("此教練尚未啟用或已停用");
+        if (!u.hasLogin() || Boolean.FALSE.equals(u.active)) throw ApiException.badRequest("此教練尚未啟用或已停用");
         return u;
     }
 
@@ -205,7 +211,7 @@ public class StudioService {
     }
 
     private static CoachMemberDto member(UserAccount u, boolean withInvite) {
-        String status = Boolean.FALSE.equals(u.active) ? "inactive" : u.passwordHash == null ? "invited" : "active";
+        String status = Boolean.FALSE.equals(u.active) ? "inactive" : !u.hasLogin() ? "invited" : "active";
         return new CoachMemberDto(u.id, u.role, u.name, u.email, u.title, status, withInvite && "invited".equals(status) ? u.inviteCode : null, u.createdAt);
     }
 

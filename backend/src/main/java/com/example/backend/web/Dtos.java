@@ -165,15 +165,78 @@ public final class Dtos {
             List<MetricDto> metrics,
             List<AppointmentDto> appointments,
             /** Coaches only: the workspace and its coaches. */
-            StudioDto studio) {}
+            StudioDto studio,
+            /** Coaches of a coaching workspace only: plan, limits and whether it is read-only. */
+            BillingDto billing) {}
 
     /** A coach in a workspace. status: active, invited (has not set a password yet) or inactive. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record CoachMemberDto(String id, String role, String name, String email, String title, String status, String inviteCode, Instant createdAt) {}
 
-    /** kind: solo (a free coach), studio, or self. maxCoaches counts the owner. */
+    /** kind: solo (a free coach), studio, or self. maxCoaches: the plan's coach seats, the owner included. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record StudioDto(String id, String kind, String name, String ownerId, Integer maxCoaches, List<CoachMemberDto> coaches) {}
+
+    // ------------------------------------------------------------------ billing
+
+    /**
+     * plan: pro or team. status: trialing, active, past_due, canceled (paid to the period's end) or
+     * expired (read-only). nextExtra*: downgrades that take effect at the next renewal.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record BillingDto(
+            String plan,
+            String status,
+            boolean writable,
+            boolean canManage,
+            Instant trialEndsAt,
+            Instant currentPeriodEnd,
+            int extraStudentPacks,
+            int extraCoachSeats,
+            Integer nextExtraStudentPacks,
+            Integer nextExtraCoachSeats,
+            int monthlyAmount,
+            int studentLimit,
+            int coachLimit,
+            int activeStudents,
+            /** Active students the caller cannot see (a studio coach sees only their own). */
+            int hiddenActiveStudents,
+            boolean subscribed,
+            boolean paymentsEnabled) {}
+
+    /** kind: subscription (first month), renewal or proration. status: paid or failed. */
+    public record PaymentDto(String id, String kind, int amount, String status, Instant createdAt) {}
+
+    public record BillingOverviewDto(BillingDto billing, List<PaymentDto> payments) {}
+
+    public record SubscribeInput(
+            @Min(0) @Max(value = 100, message = "加購學員名額最多 100 組") int extraStudentPacks,
+            @Min(0) @Max(value = 50, message = "加購教練名額最多 50 位") int extraCoachSeats) {}
+
+    public record ChangePlanInput(
+            @NotBlank @Pattern(regexp = "pro|team") String plan,
+            @Min(0) @Max(value = 100, message = "加購學員名額最多 100 組") int extraStudentPacks,
+            @Min(0) @Max(value = 50, message = "加購教練名額最多 50 位") int extraCoachSeats,
+            @Size(max = 120) String studioName) {}
+
+    /** The browser posts {@code fields} to {@code action} (NewebPay's payment page). */
+    public record CheckoutDto(String action, java.util.Map<String, String> fields) {}
+
+    /** applied: changed at once (trial or downgrade); otherwise pay through {@code checkout}. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record ChangeResultDto(boolean applied, CheckoutDto checkout) {}
+
+    // ------------------------------------------------------------------ auth
+
+    /**
+     * Sign in with a Google ID token. A new user also sends the account type (self, coach or studio),
+     * plus the studio name for a studio; without it the server answers 409 signup_required.
+     */
+    public record GoogleAuthInput(
+            @NotBlank String credential,
+            @Pattern(regexp = "self|coach|studio") String accountType,
+            @Size(max = 30) String name,
+            @Size(max = 120) String studio) {}
 
     public record RegisterStudioInput(
             @NotBlank(message = "請輸入姓名") @Size(max = 30) String name,

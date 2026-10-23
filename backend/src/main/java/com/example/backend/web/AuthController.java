@@ -4,6 +4,7 @@ import com.example.backend.auth.AuthService;
 import com.example.backend.auth.CurrentUser;
 import com.example.backend.web.Dtos.ActivateInput;
 import com.example.backend.web.Dtos.AuthResponse;
+import com.example.backend.web.Dtos.GoogleAuthInput;
 import com.example.backend.web.Dtos.LoginInput;
 import com.example.backend.web.Dtos.MeDto;
 import com.example.backend.web.Dtos.RegisterCoachInput;
@@ -64,6 +65,17 @@ public class AuthController {
     @PostMapping("/auth/activate")
     public AuthResponse activate(@Valid @RequestBody ActivateInput in) {
         return auth.activate(in);
+    }
+
+    @PostMapping("/auth/google")
+    public AuthResponse google(@Valid @RequestBody GoogleAuthInput in) {
+        return auth.google(in);
+    }
+
+    /** A token for the caller's current role, e.g. after a paid upgrade made them a studio owner. */
+    @PostMapping("/auth/refresh")
+    public AuthResponse refresh(CurrentUser user) {
+        return auth.refresh(user);
     }
 
     @GetMapping("/auth/me")

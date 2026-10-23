@@ -31,3 +31,13 @@ export async function activateInvite(inviteCode: string, password: string) {
 export async function createInvite(studentId: string, token: string) {
   return api<{ inviteCode: string; expiresAt: string }>('POST', `/students/${studentId}/invite`, undefined, token)
 }
+
+/** Signs in with a Google ID token. A new user gets ApiError 'signup_required' until they send an account type. */
+export async function googleSignIn(credential: string, signup?: { accountType: 'self' | 'coach' | 'studio'; studio?: string }) {
+  return toSession(await api<AuthResponse>('POST', '/auth/google', { credential, ...signup }))
+}
+
+/** A new token for the current role (after a paid upgrade turned a coach into a studio owner). */
+export async function refreshSession(token: string) {
+  return toSession(await api<AuthResponse>('POST', '/auth/refresh', undefined, token))
+}

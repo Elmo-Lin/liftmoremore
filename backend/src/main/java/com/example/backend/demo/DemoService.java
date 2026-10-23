@@ -1,5 +1,6 @@
 package com.example.backend.demo;
 
+import com.example.backend.billing.Plans;
 import com.example.backend.common.ApiException;
 import com.example.backend.common.Domain;
 import com.example.backend.domain.Appointment;
@@ -85,8 +86,9 @@ public class DemoService {
         boolean studio = data.studio() != null && Domain.SPACE_STUDIO.equals(data.studio().kind());
         if (studio) {
             coach.kind = Domain.SPACE_STUDIO;
-            coach.maxCoaches = data.studio().maxCoaches() != null ? data.studio().maxCoaches() : Domain.DEFAULT_STUDIO_SEATS;
         }
+        // The demo data is months old; give the demo workspace a fresh trial so it stays writable.
+        coach.subscription = Plans.trial(Instant.now());
         w.set(db.doc(Db.COACHES, coachId), db.encode(coach));
         account(w, coachId, studio ? Domain.OWNER : Domain.COACH, coach.name, coach.email, coach.phone, coach.createdAt, coachId, hash);
         if (studio) {

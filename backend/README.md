@@ -77,6 +77,8 @@ coaches/{coachId}       workspace (kind: solo / studio / self, maxCoaches); ever
    - `COACHLOG_JWT_SECRET` (at least 32 random bytes)
    - `COACHLOG_CORS_ORIGINS=https://<your-hosting-domain>`
    - Leave `COACHLOG_DEMO_ENABLED` unset (off).
+   - `COACHLOG_APP_URL` / `COACHLOG_API_URL`: the public app URL and API URL (NewebPay sends people and results back there).
+   - `GOOGLE_CLIENT_ID` for Google sign-in, and the `NEWEBPAY_*` shop keys for payments (see below).
 5. Host the frontend on **Firebase Hosting**, built with `VITE_API_URL` set to the
    API URL. Alternatively, add a Hosting rewrite `/api/** → Cloud Run service` so
    the app and the API share one origin.
@@ -95,8 +97,36 @@ coaches/{coachId}       workspace (kind: solo / studio / self, maxCoaches); ever
 | `COACHLOG_DEMO_ENABLED` | `false` (`true` in the dev profile) | Enables `/api/demo/*` |
 | `COACHLOG_DEMO_PASSWORD` | `demo1234` | Password given to imported demo accounts |
 
+| `COACHLOG_APP_URL` | `http://localhost:5173` | Frontend origin; NewebPay returns the browser to `/coach/billing` there |
+| `COACHLOG_API_URL` | `http://localhost:8080/api` | Public API base; NewebPay posts results to `/billing/newebpay/*` |
+| `GOOGLE_CLIENT_ID` | unset (Google sign-in off) | OAuth client ID (Web application); the frontend's `VITE_GOOGLE_CLIENT_ID` must match |
+| `NEWEBPAY_MERCHANT_ID` / `NEWEBPAY_HASH_KEY` / `NEWEBPAY_HASH_IV` | unset (payments off) | NewebPay shop credentials (HashKey 32 chars, HashIV 16) |
+| `NEWEBPAY_BASE_URL` | `https://ccore.newebpay.com` (sandbox) | `https://core.newebpay.com` for live payments |
+
 > `/api/demo/import` is unauthenticated and **wipes all coach and user data**.
 > It is off by default. Only the local `dev` profile turns it on.
+
+## Subscriptions
+
+Coaching workspaces pay monthly; self-trackers and students are free. The plan follows the workspace:
+a free coach is on **Pro** (NT$399, 30 active students), a studio on **Team** (NT$999, 3 coaches,
+100 active students). Add-ons: +NT$99 per 10 students, +NT$199 per extra Team coach.
+
+- **Trial**: 10 days from sign-up, no card. When the trial or a paid period lapses (3 days' grace
+  after a missed renewal), the workspace turns **read-only**: every write returns
+  `402 subscription_required` (`billing/WriteGuard`), reads keep working, nothing is deleted.
+- **Limits**: only `active` students count; every active or invited coach takes a seat. Going over
+  never deletes anything; adding students/coaches returns `409 student_limit` / `seats_full`.
+- **NewebPay**: subscribing creates a monthly credit-card mandate (定期定額), first month charged
+  at once. Each renewal arrives at `/api/billing/newebpay/period-notify` and extends the period.
+  Upgrades (more seats, Pro → Team) are on immediately after a one-time MPG payment of the
+  prorated difference; the mandate's amount is then changed for the next period (`AlterAmt`).
+  Downgrades are scheduled for the next renewal. Cancelling terminates the mandate; the workspace
+  stays writable until the period ends. Callbacks are idempotent and authenticated by decrypting
+  with the shop's HashKey/HashIV.
+- **Before going live**: run the whole flow on NewebPay's sandbox. The field names and API
+  versions in `billing/NewebPay.java` follow the 定期定額 / MPG specs and must be checked against the
+  spec versions issued with your merchant account. **E-invoices (電子發票) are not issued yet.**
 
 ## Business rules enforced server-side
 

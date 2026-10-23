@@ -1,6 +1,7 @@
 // All mutations of AppData go through these actions. Each validates against
 // the latest state and returns a Result so the UI can show a precise error.
 import { demoSpaceOf, generateDemoData } from '../data/mock'
+import { activeStudentsOf, limitMessage, readOnlyMessage } from '../lib/billing'
 import { uid } from '../lib/id'
 import { isCoachRole } from '../lib/roles'
 import { deductionBlocker, deductionFor, packageBalance, studentBalance } from '../lib/sessions'
@@ -90,7 +91,7 @@ const isActiveCoach = (d: AppData, id: ID) => d.studio?.coaches.some((c) => c.id
 export function createActions(get: () => AppData, set: (next: AppData) => void, actor: () => Role, actingCoach: () => ID | undefined = () => undefined) {
   const update = (fn: (d: AppData) => AppData) => set(fn(get()))
 
-  return {
+  const actions = {
     /** Regenerates the current demo workspace only. */
     resetDemo() {
       set(generateDemoData(demoSpaceOf(get())))
@@ -106,6 +107,7 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
       const self = actingCoach() ?? d.coach.id
       const teacher = coachId ?? self
       if (teacher !== self && (actor() !== 'owner' || !isActiveCoach(d, teacher))) return fail('找不到此教練')
+      if (d.billing && input.status === 'active' && activeStudentsOf(d) >= d.billing.studentLimit) return fail(limitMessage(d.billing))
       const now = nowISO()
       const student: Student = {
         ...input,
@@ -135,6 +137,9 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
       const errors = validateStudent(next, d.students.filter((s) => s.id !== id))
       const first = Object.values(errors)[0]
       if (first) return fail(first)
+      // Reactivating takes a slot again; inactive students keep their history for free.
+      if (d.billing && next.status === 'active' && current.status !== 'active' && activeStudentsOf(d) >= d.billing.studentLimit)
+        return fail(limitMessage(d.billing))
       update((d) => ({
         ...d,
         students: d.students.map((s) => (s.id === id ? next : s)),
@@ -226,7 +231,7 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
       const email = input.email.trim().toLowerCase()
       if (d.studio.coaches.some((c) => c.email.toLowerCase() === email) || d.students.some((s) => s.email.toLowerCase() === email))
         return fail('此 Email 已被其他帳號使用')
-      if (seatsUsed(d) >= seatsOf(d)) return fail(`教練名額已滿（${seatsOf(d)} 位，含經營者）`)
+      if (seatsUsed(d) >= seatsOf(d)) return fail(`教練名額已滿（${seatsOf(d)} 位，含經營者）${d.billing ? '。請至「方案與付款」加購教練名額。' : ''}`)
       const member: CoachMember = {
         id: uid('coach'),
         role: 'coach',
@@ -475,6 +480,18 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
       return ok(bal.remaining + delta)
     },
   }
+
+  // Read-only mode (API mode, lapsed trial or plan): refuse every write up front with the reason,
+  // instead of letting the server reject it after the screen already changed.
+  for (const name of Object.keys(actions) as (keyof typeof actions)[]) {
+    if (name === 'resetDemo') continue
+    const fn = actions[name] as (...a: unknown[]) => unknown
+    ;(actions as Record<string, unknown>)[name] = (...args: unknown[]) => {
+      const b = get().billing
+      return b && !b.writable ? fail(readOnlyMessage(b)) : fn(...args)
+    }
+  }
+  return actions
 }
 
 export type DataActions = ReturnType<typeof createActions>

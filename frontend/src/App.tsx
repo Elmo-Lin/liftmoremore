@@ -2,7 +2,7 @@ import { lazy, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router'
 import { AppShell } from './components/layout/AppShell'
 import { ScrollToTop } from './components/layout/ScrollToTop'
-import { LoginPage } from './pages/Login'
+import { DemoPage, LoginPage } from './pages/Login'
 import { NotFoundPage } from './pages/NotFound'
 import { useData, useSession } from './store/contexts'
 import { homePath, isCoachRole } from './lib/roles'
@@ -14,6 +14,7 @@ const PlansPage = lazy(() => import('./pages/coach/Plans').then((m) => ({ defaul
 const StudentDetailPage = lazy(() => import('./pages/coach/StudentDetail').then((m) => ({ default: m.StudentDetailPage })))
 const StudentsPage = lazy(() => import('./pages/coach/Students').then((m) => ({ default: m.StudentsPage })))
 const CoachDetailPage = lazy(() => import('./pages/coach/CoachDetail').then((m) => ({ default: m.CoachDetailPage })))
+const BillingPage = lazy(() => import('./pages/coach/Billing').then((m) => ({ default: m.BillingPage })))
 const StudioPage = lazy(() => import('./pages/coach/Studio').then((m) => ({ default: m.StudioPage })))
 const CoachSchedulePage = lazy(() => import('./pages/coach/Schedule').then((m) => ({ default: m.CoachSchedulePage })))
 const CoachWorkoutLoggerPage = lazy(() => import('./pages/coach/WorkoutLogger').then((m) => ({ default: m.CoachWorkoutLoggerPage })))
@@ -49,6 +50,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomeRedirect />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/demo" element={<DemoPage />} />
         <Route
           path="/coach"
           element={
@@ -67,6 +69,7 @@ export default function App() {
           <Route path="analytics" element={<CoachAnalyticsPage />} />
           <Route path="studio" element={<StudioPage />} />
           <Route path="studio/coaches/:id" element={<CoachDetailPage />} />
+          <Route path="billing" element={<BillingPage />} />
         </Route>
         <Route
           path="/student"

@@ -3,6 +3,7 @@ import {
   CalendarDays,
   ChartLine,
   ClipboardList,
+  CreditCard,
   Dumbbell,
   History,
   House,
@@ -17,6 +18,7 @@ import { BRAND } from '../../config/brand'
 import { useData, useSession } from '../../store/contexts'
 import { selectIsStudio } from '../../store/selectors'
 import { PageLoading } from '../ui/PageLoading'
+import { BillingBanner } from './BillingBanner'
 import { RoleSwitcher } from './RoleSwitcher'
 
 interface NavItem {
@@ -42,6 +44,7 @@ const COACH_NAV: NavItem[] = [
 
 /** Owners manage their studio here; free coaches can upgrade from it. Phones reach it from the account menu. */
 const STUDIO_ITEM: NavItem = { to: '/coach/studio', label: '工作室', icon: Building2, desktopOnly: true }
+const BILLING_ITEM: NavItem = { to: '/coach/billing', label: '方案與付款', icon: CreditCard, desktopOnly: true }
 
 const STUDENT_NAV: NavItem[] = [
   { to: '/student', label: '首頁', icon: House, end: true },
@@ -108,7 +111,8 @@ export function AppShell() {
   const { session } = useSession()
   const { data } = useData()
   const showStudio = session?.role === 'owner' || (session?.role === 'coach' && !selectIsStudio(data))
-  const nav = session?.role === 'self' ? SELF_NAV : session?.role === 'student' ? STUDENT_NAV : showStudio ? [...COACH_NAV, STUDIO_ITEM] : COACH_NAV
+  const coachNav = [...COACH_NAV, ...(showStudio ? [STUDIO_ITEM] : []), ...(data.billing ? [BILLING_ITEM] : [])]
+  const nav = session?.role === 'self' ? SELF_NAV : session?.role === 'student' ? STUDENT_NAV : coachNav
   const tabBar = nav.filter((item) => !item.desktopOnly)
 
   return (
@@ -148,6 +152,7 @@ export function AppShell() {
         </MobileTopBar>
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-[calc(3rem+1.25rem)] pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-8 md:pt-8 md:pb-12">
+          <BillingBanner />
           <Suspense fallback={<PageLoading />}>
             <Outlet />
           </Suspense>

@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Building2, LogOut, RotateCcw } from 'lucide-react'
+import { ArrowLeftRight, Building2, CreditCard, LogOut, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { enterLocalDemo, exitLocalDemo, isApiMode, isLocalDemo } from '../../api/client'
@@ -41,6 +41,10 @@ function AccountMenu({ placement }: { placement: Placement }) {
   const goStudio = () => {
     setOpen(false)
     navigate('/coach/studio')
+  }
+  const goBilling = () => {
+    setOpen(false)
+    navigate('/coach/billing')
   }
 
   if (placement === 'sidebar') {
@@ -86,12 +90,21 @@ function AccountMenu({ placement }: { placement: Placement }) {
           </>
         }
       >
-        {studioLink ? (
-          <Button variant="secondary" icon={Building2} className="h-11 w-full" onClick={goStudio}>
-            {studioLink}
-          </Button>
+        {studioLink || data.billing ? (
+          <div className="space-y-2">
+            {studioLink && (
+              <Button variant="secondary" icon={Building2} className="h-11 w-full" onClick={goStudio}>
+                {studioLink}
+              </Button>
+            )}
+            {data.billing && (
+              <Button variant="secondary" icon={CreditCard} className="h-11 w-full" onClick={goBilling}>
+                方案與付款
+              </Button>
+            )}
+          </div>
         ) : (
-          <p className="text-sm text-ink-600">登出後，下次需要用 Email 和密碼登入。</p>
+          <p className="text-sm text-ink-600">登出後，下次需要用 Email 或 Google 登入。</p>
         )}
       </Modal>
     </>

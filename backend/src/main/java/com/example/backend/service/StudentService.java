@@ -1,6 +1,7 @@
 package com.example.backend.service;
 
 import com.example.backend.auth.CurrentUser;
+import com.example.backend.billing.SubscriptionService;
 import com.example.backend.common.ApiException;
 import com.example.backend.common.Domain;
 import com.example.backend.common.Ids;
@@ -29,10 +30,12 @@ public class StudentService {
 
     private final Db db;
     private final AccessService access;
+    private final SubscriptionService subscriptions;
 
-    public StudentService(Db db, AccessService access) {
+    public StudentService(Db db, AccessService access, SubscriptionService subscriptions) {
         this.db = db;
         this.access = access;
+        this.subscriptions = subscriptions;
     }
 
     public List<StudentDto> list(CurrentUser user) {
@@ -51,6 +54,7 @@ public class StudentService {
         user.requireCoach();
         String id = Ids.orNew(in.id(), "stu");
         validate(user, in);
+        if ("active".equals(in.status())) subscriptions.requireStudentSlot(user);
         String email = in.email().trim();
         Instant now = Instant.now();
 
@@ -81,8 +85,10 @@ public class StudentService {
     }
 
     public StudentDto update(CurrentUser user, String id, StudentInput in) {
-        access.coachStudent(user, id);
+        Student before = access.coachStudent(user, id);
         validate(user, in);
+        // Reactivating a student takes a slot again; inactive students keep their history for free.
+        if ("active".equals(in.status()) && !"active".equals(before.status)) subscriptions.requireStudentSlot(user);
         String newEmail = in.email().trim();
         return db.transaction(tx -> {
             DocumentReference ref = db.coachDoc(user.coachId(), Db.STUDENTS, id);
