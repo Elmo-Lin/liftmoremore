@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { activateInvite, login, registerCoach, registerSelf, registerStudio } from '../api/auth'
 import { enterLocalDemo, exitLocalDemo, isApiMode, isLocalDemo } from '../api/client'
-import { Logo } from '../components/layout/AppShell'
+import { Logo, MobileTopBar } from '../components/layout/AppShell'
 import { DemoPersonaList } from '../components/layout/DemoPersonas'
 import { Button } from '../components/ui/Button'
 import { Segmented, TextInput } from '../components/ui/Form'
@@ -35,10 +35,14 @@ export function LoginPage() {
     <div className="min-h-dvh bg-canvas">
       {/* Mobile: headline → sign-in → features, so sign-in is reachable without scrolling.
           Desktop: headline and features on the left, sign-in on the right. */}
-      <div className="mx-auto grid min-h-dvh max-w-6xl content-start gap-6 px-4 py-6 md:grid-cols-[1.1fr_1fr] md:content-center md:gap-x-16 md:gap-y-8 md:px-8 md:py-8">
+      <MobileTopBar />
+      <div className="mx-auto grid min-h-dvh max-w-6xl content-start gap-6 px-4 pt-[calc(3rem+1.25rem)] pb-6 md:grid-cols-[1.1fr_1fr] md:content-center md:gap-x-16 md:gap-y-8 md:px-8 md:py-8">
         <section className="md:col-start-1 md:row-start-1 md:self-end">
-          <Logo />
-          <h1 className="mt-6 text-[30px] leading-tight font-semibold tracking-tight text-ink-900 md:mt-10 md:text-[40px]">
+          {/* Phones show the logo in the fixed top bar instead. */}
+          <div className="hidden md:block">
+            <Logo />
+          </div>
+          <h1 className="text-[30px] leading-tight font-semibold tracking-tight text-ink-900 md:mt-10 md:text-[40px]">
             {BRAND.tagline[0]}
             <br />
             <span className="text-accent-700">{BRAND.tagline[1]}</span>

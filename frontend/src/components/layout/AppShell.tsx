@@ -83,8 +83,28 @@ function useScrolled() {
   return scrolled
 }
 
-export function AppShell() {
+/**
+ * Phone top bar with the logo (shared by the app and the login page). Fixed, not sticky, so it
+ * stays put during iOS rubber-band overscroll like a native nav bar; pages pad their content by
+ * its 3rem height. Scroll-edge style: page-coloured at the top (blending into the status bar, which
+ * shows the page background in the installed app), material + hairline once content scrolls under it.
+ */
+export function MobileTopBar({ children }: { children?: React.ReactNode }) {
   const scrolled = useScrolled()
+  return (
+    <header
+      data-topbar
+      className={`fixed inset-x-0 top-0 z-30 flex h-12 items-center justify-between border-b px-4 transition-[background-color,border-color] duration-200 md:hidden ${
+        scrolled ? 'material border-black/10' : 'border-transparent bg-canvas'
+      }`}
+    >
+      <Logo />
+      {children}
+    </header>
+  )
+}
+
+export function AppShell() {
   const { session } = useSession()
   const { data } = useData()
   const showStudio = session?.role === 'owner' || (session?.role === 'coach' && !selectIsStudio(data))
@@ -123,19 +143,9 @@ export function AppShell() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Mobile top bar. Fixed (not sticky) so it stays put during iOS rubber-band overscroll, like a
-            native nav bar. Scroll-edge style: page-coloured at the top (blending into the status bar,
-            which shows the page background in the installed app), material + hairline once content
-            scrolls underneath. */}
-        <header
-          data-topbar
-          className={`fixed inset-x-0 top-0 z-30 flex h-12 items-center justify-between border-b px-4 transition-[background-color,border-color] duration-200 md:hidden ${
-            scrolled ? 'material border-black/10' : 'border-transparent bg-canvas'
-          }`}
-        >
-          <Logo />
+        <MobileTopBar>
           <RoleSwitcher placement="topbar" />
-        </header>
+        </MobileTopBar>
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-[calc(3rem+1.25rem)] pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-8 md:pt-8 md:pb-12">
           <Suspense fallback={<PageLoading />}>

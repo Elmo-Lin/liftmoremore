@@ -1,6 +1,6 @@
 import { Building2, Check, Copy, KeyRound, Ticket, UserMinus, UserPlus, Users } from 'lucide-react'
 import { useState } from 'react'
-import { Navigate } from 'react-router'
+import { Link, Navigate } from 'react-router'
 import { isApiMode } from '../../api/client'
 import { inviteCoach, reinviteCoach, upgradeToStudio, type CoachInvite } from '../../api/studio'
 import { Button } from '../../components/ui/Button'
@@ -11,10 +11,10 @@ import { Avatar, Badge, Card, CardHeader, DemoNotice, PageHeader, Stat } from '.
 import { BRAND } from '../../config/brand'
 import { formatDate } from '../../lib/format'
 import { LOW_BALANCE_THRESHOLD } from '../../lib/sessions'
-import { workoutDate } from '../../lib/stats'
+import { coachStats } from '../../lib/studio'
 import { seatsOf, seatsUsed } from '../../store/actions'
 import { useData, useSession, useToast } from '../../store/contexts'
-import { selectActiveCoaches, selectBalance, selectIsStudio } from '../../store/selectors'
+import { selectActiveCoaches, selectIsStudio } from '../../store/selectors'
 import type { AppData, CoachMember } from '../../types'
 
 /** Owners manage their studio here; a free coach sees the upgrade offer; studio coaches never come here. */
@@ -97,18 +97,7 @@ function ManageStudio() {
   const seats = seatsOf(data)
   const used = seatsUsed(data)
   const active = selectActiveCoaches(data)
-  const monthStart = new Date()
-  monthStart.setDate(1)
-  monthStart.setHours(0, 0, 0, 0)
-  const statsFor = (coachId: string) => {
-    const ids = new Set(data.relationships.filter((r) => r.coachId === coachId).map((r) => r.studentId))
-    const students = data.students.filter((s) => ids.has(s.id))
-    return {
-      students: students.filter((s) => s.status === 'active').length,
-      sessions: data.workouts.filter((w) => ids.has(w.studentId) && w.type === 'coached' && w.status === 'completed' && new Date(workoutDate(w)) >= monthStart).length,
-      low: students.filter((s) => s.status === 'active' && selectBalance(data, s.id).remaining <= LOW_BALANCE_THRESHOLD).length,
-    }
-  }
+  const statsFor = (coachId: string) => coachStats(data, coachId)
   const totals = active.map((c) => statsFor(c.id)).reduce((a, b) => ({ students: a.students + b.students, sessions: a.sessions + b.sessions, low: a.low + b.low }), { students: 0, sessions: 0, low: 0 })
 
   return (
@@ -138,24 +127,26 @@ function ManageStudio() {
             const st = statsFor(c.id)
             return (
               <li key={c.id} className={`flex items-center gap-3 px-4 py-3.5 sm:px-5 ${c.status === 'inactive' ? 'opacity-60' : ''}`}>
-                <Avatar name={c.name} id={c.id} />
-                <div className="min-w-0 flex-1">
-                  <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[15px] font-medium text-ink-900">
-                    <span className="whitespace-nowrap">{c.name}</span>
-                    {c.role === 'owner' && <Badge tone="accent">經營者</Badge>}
-                    {c.status === 'invited' && <Badge tone="warn">待啟用</Badge>}
-                    {c.status === 'inactive' && <Badge>已停用</Badge>}
-                  </p>
-                  <p className="truncate text-xs text-ink-500">
-                    {c.title ? `${c.title}・` : ''}
-                    {c.email}
-                  </p>
-                  {c.status === 'active' && (
-                    <p className="tabular mt-0.5 text-xs text-ink-600">
-                      學員 {st.students}・本月 {st.sessions} 堂{st.low ? `・偏低 ${st.low}` : ''}
+                <Link to={`/coach/studio/coaches/${c.id}`} className="-my-1.5 -ml-1.5 flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1.5 hover:bg-subtle">
+                  <Avatar name={c.name} id={c.id} />
+                  <div className="min-w-0 flex-1">
+                    <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[15px] font-medium text-ink-900">
+                      <span className="whitespace-nowrap">{c.name}</span>
+                      {c.role === 'owner' && <Badge tone="accent">經營者</Badge>}
+                      {c.status === 'invited' && <Badge tone="warn">待啟用</Badge>}
+                      {c.status === 'inactive' && <Badge>已停用</Badge>}
                     </p>
-                  )}
-                </div>
+                    <p className="truncate text-xs text-ink-500">
+                      {c.title ? `${c.title}・` : ''}
+                      {c.email}
+                    </p>
+                    {c.status === 'active' && (
+                      <p className="tabular mt-0.5 text-xs text-ink-600">
+                        學員 {st.students}・本月 {st.sessions} 堂{st.low ? `・偏低 ${st.low}` : ''}
+                      </p>
+                    )}
+                  </div>
+                </Link>
                 <div className="flex shrink-0 gap-1.5">
                   {c.status === 'invited' && c.inviteCode && (
                     <Button variant="secondary" size="sm" icon={KeyRound} onClick={() => setShown({ coach: c, code: c.inviteCode! })}>

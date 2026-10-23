@@ -97,9 +97,9 @@ export function CoachDashboardPage() {
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="進行中學員" value={active.length} unit="位" icon={Users} sub={`共 ${data.students.length} 位，${data.students.length - active.length} 位暫停`} />
-        <Stat label="今日課程" value={todays.length} unit="堂" icon={CalendarDays} sub={`已完成記錄 ${todayDone.length} 堂`} />
-        <Stat label="本月完成課程" value={monthCoached.length} unit="堂" icon={CircleCheck} sub="教練課，不含自主訓練" />
+        <Stat label="進行中學員" value={active.length} unit="位" icon={Users} sub={`共 ${data.students.length} 位，${data.students.length - active.length} 位暫停`} to="/coach/students" />
+        <Stat label="今日課程" value={todays.length} unit="堂" icon={CalendarDays} sub={`已完成記錄 ${todayDone.length} 堂`} to="/coach/schedule" />
+        <Stat label="本月完成課程" value={monthCoached.length} unit="堂" icon={CircleCheck} sub="教練課，不含自主訓練" to="/coach/analytics" />
         <Stat
           label="堂數偏低"
           value={lowBalance.length}
@@ -107,6 +107,7 @@ export function CoachDashboardPage() {
           icon={Ticket}
           tone={lowBalance.length ? 'warn' : 'default'}
           sub={`剩餘 ${LOW_BALANCE_THRESHOLD} 堂以下`}
+          to="/coach/students?sort=balance"
         />
       </div>
 
@@ -139,7 +140,14 @@ export function CoachDashboardPage() {
                         {s.name}
                       </Link>
                       <p className="truncate text-xs text-ink-500">
-                        {multiCoach && `${selectCoachName(data, selectCoachOf(data, s.id))}・`}
+                        {multiCoach && (
+                          <>
+                            <Link to={`/coach/studio/coaches/${selectCoachOf(data, s.id)}`} className="font-medium text-accent-700 hover:underline">
+                              {selectCoachName(data, selectCoachOf(data, s.id))}
+                            </Link>
+                            ・
+                          </>
+                        )}
                         {day ? `下一堂：${day.name}` : '未指派計畫'}・剩 {bal.remaining} 堂
                       </p>
                     </div>

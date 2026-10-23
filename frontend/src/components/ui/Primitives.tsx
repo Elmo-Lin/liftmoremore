@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import type { HTMLAttributes, ReactNode } from 'react'
+import { Link } from 'react-router'
 import { initials } from '../../lib/format'
 
 /** Inset-grouped card: white, rounded, no border on the gray grouped background. */
@@ -94,9 +95,10 @@ export function EmptyState({ icon: Icon, title, description, action, compact }: 
   )
 }
 
-export function Stat({ label, value, unit, sub, icon: Icon, tone = 'default' }: { label: string; value: ReactNode; unit?: string; sub?: ReactNode; icon?: LucideIcon; tone?: 'default' | 'warn' }) {
-  return (
-    <Card className="px-4 py-3.5 md:px-5 md:py-4">
+/** `to`: the card links to the page with the details behind the number. */
+export function Stat({ label, value, unit, sub, icon: Icon, tone = 'default', to }: { label: string; value: ReactNode; unit?: string; sub?: ReactNode; icon?: LucideIcon; tone?: 'default' | 'warn'; to?: string }) {
+  const body = (
+    <>
       <div className="flex items-center justify-between">
         <p className="text-[13px] font-medium text-ink-500">{label}</p>
         {Icon && <Icon className={`size-4 ${tone === 'warn' ? 'text-warn-500' : 'text-accent-600'}`} strokeWidth={2} />}
@@ -106,7 +108,13 @@ export function Stat({ label, value, unit, sub, icon: Icon, tone = 'default' }: 
         {unit && <span className="ml-1 font-sans text-[15px] font-medium tracking-normal text-ink-500">{unit}</span>}
       </p>
       {sub && <div className="mt-1.5 text-xs text-ink-500">{sub}</div>}
-    </Card>
+    </>
+  )
+  if (!to) return <Card className="px-4 py-3.5 md:px-5 md:py-4">{body}</Card>
+  return (
+    <Link to={to} className="block rounded-xl bg-surface px-4 py-3.5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_0_0_0.5px_rgba(0,0,0,0.04)] transition-colors hover:bg-raised active:bg-subtle md:px-5 md:py-4">
+      {body}
+    </Link>
   )
 }
 

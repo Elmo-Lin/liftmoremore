@@ -20,8 +20,9 @@ export function StudentsPage() {
   const [params, setParams] = useSearchParams()
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<StatusFilter>('active')
-  const [sort, setSort] = useState<SortKey>('recent')
-  const [coachFilter, setCoachFilter] = useState('all')
+  // ?sort=balance and ?coach=<id> preset the list (links from the dashboard and a coach's page).
+  const [sort, setSort] = useState<SortKey>(() => (params.get('sort') === 'balance' ? 'balance' : 'recent'))
+  const [coachFilter, setCoachFilter] = useState(() => params.get('coach') ?? 'all')
   const adding = params.get('new') === '1'
   // Studio owners see every coach's students: show who teaches whom and let them filter by coach.
   const { session } = useSession()

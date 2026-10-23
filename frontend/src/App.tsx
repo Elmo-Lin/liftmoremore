@@ -13,6 +13,7 @@ const PlanEditorPage = lazy(() => import('./pages/coach/PlanEditor').then((m) =>
 const PlansPage = lazy(() => import('./pages/coach/Plans').then((m) => ({ default: m.PlansPage })))
 const StudentDetailPage = lazy(() => import('./pages/coach/StudentDetail').then((m) => ({ default: m.StudentDetailPage })))
 const StudentsPage = lazy(() => import('./pages/coach/Students').then((m) => ({ default: m.StudentsPage })))
+const CoachDetailPage = lazy(() => import('./pages/coach/CoachDetail').then((m) => ({ default: m.CoachDetailPage })))
 const StudioPage = lazy(() => import('./pages/coach/Studio').then((m) => ({ default: m.StudioPage })))
 const CoachSchedulePage = lazy(() => import('./pages/coach/Schedule').then((m) => ({ default: m.CoachSchedulePage })))
 const CoachWorkoutLoggerPage = lazy(() => import('./pages/coach/WorkoutLogger').then((m) => ({ default: m.CoachWorkoutLoggerPage })))
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="plans/:id" element={<PlanEditorPage />} />
           <Route path="analytics" element={<CoachAnalyticsPage />} />
           <Route path="studio" element={<StudioPage />} />
+          <Route path="studio/coaches/:id" element={<CoachDetailPage />} />
         </Route>
         <Route
           path="/student"

@@ -1,5 +1,6 @@
 import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Play, Plus } from 'lucide-react'
 import { useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { AppointmentModal } from '../../components/schedule/AppointmentModal'
 import { useRescheduleDrag, type DragState } from '../../components/schedule/useRescheduleDrag'
 import { Button, ButtonLink, IconButton } from '../../components/ui/Button'
@@ -36,8 +37,9 @@ export function CoachSchedulePage() {
         ))}
     </>
   )
-  // 'all', or one coach's ID (the owner's own included).
-  const [scope, setScope] = useState('all')
+  // 'all', or one coach's ID (the owner's own included); ?coach=<id> presets it.
+  const [params] = useSearchParams()
+  const [scope, setScope] = useState(() => params.get('coach') ?? 'all')
 
   // Moving keeps the time of day and only changes the date.
   const { drag, start, consumeClick } = useRescheduleDrag({
