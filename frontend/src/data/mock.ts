@@ -477,7 +477,7 @@ export function generateMockData(nowDate = new Date()): AppData {
     email: 'stone@example.com',
     phone: '0900-000-123',
     title: '肌力與體能教練',
-    studio: 'Action Gym（台北大安）',
+    studio: 'Action Gym',
     createdAt: new Date(now - 400 * DAY).toISOString(),
   }
 
@@ -686,6 +686,7 @@ export function generateMockData(nowDate = new Date()): AppData {
   const todaySlots: [string, number, number][] = [
     ['stu_02', 7, 0],
     ['stu_01', 12, 30],
+    ['stu_03', 16, 0],
     ['stu_04', 19, 0],
     ['stu_06', 20, 30],
   ]

@@ -4,7 +4,7 @@ import { durationMin, formatDate, formatTime, volumeKg } from '../../lib/format'
 import { deductionFor } from '../../lib/sessions'
 import { completedSets, workoutSetCount, workoutVolume } from '../../lib/stats'
 import { useData, useToast } from '../../store/contexts'
-import { selectStudent, useExerciseMap, useIsSelf } from '../../store/selectors'
+import { selectStudent, selectTaughtBy, useExerciseMap, useIsSelf } from '../../store/selectors'
 import type { WorkoutSession } from '../../types'
 import { Button } from '../ui/Button'
 import { TextInput } from '../ui/Form'
@@ -41,6 +41,7 @@ export function WorkoutRow({
 }) {
   const { data } = useData()
   const student = showStudent ? selectStudent(data, workout.studentId) : undefined
+  const taughtBy = selectTaughtBy(data, workout)
   const when = workout.completedAt ?? workout.startedAt
   return (
     <button type="button" onClick={onOpen} className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-subtle/60">
@@ -63,7 +64,7 @@ export function WorkoutRow({
         </div>
         <p className="tabular mt-0.5 text-xs text-ink-500">
           {student ? `${formatDate(when, { weekday: true })} ` : ''}
-          {formatTime(workout.startedAt)}・{workout.exercises.length} 個動作・{workoutSetCount(workout)} 組・{volumeKg(workoutVolume(workout))}
+          {formatTime(workout.startedAt)}・{taughtBy ? `${taughtBy}・` : ''}{workout.exercises.length} 個動作・{workoutSetCount(workout)} 組・{volumeKg(workoutVolume(workout))}
         </p>
       </div>
       <ChevronRight className="size-4 shrink-0 text-ink-300" />
@@ -105,6 +106,7 @@ export function WorkoutDetailModal({
         description={
           <span className="inline-flex flex-wrap items-center gap-x-2">
             {audience === 'coach' && student && <span>{student.name}</span>}
+            {selectTaughtBy(data, current) && <span>教練 {selectTaughtBy(data, current)}</span>}
             <span>{formatDate(current.completedAt ?? current.startedAt, { year: true, weekday: true })}</span>
             <span className="inline-flex items-center gap-1">
               <Clock className="size-3.5" />

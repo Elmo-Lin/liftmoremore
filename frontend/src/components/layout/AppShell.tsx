@@ -123,12 +123,13 @@ export function AppShell() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Mobile top bar. iOS scroll-edge style: transparent at the top (blending into the status bar,
+        {/* Mobile top bar. Fixed (not sticky) so it stays put during iOS rubber-band overscroll, like a
+            native nav bar. Scroll-edge style: page-coloured at the top (blending into the status bar,
             which shows the page background in the installed app), material + hairline once content
             scrolls underneath. */}
         <header
           data-topbar
-          className={`sticky top-0 z-30 flex h-12 items-center justify-between border-b px-4 transition-[background-color,border-color] duration-200 md:hidden ${
+          className={`fixed inset-x-0 top-0 z-30 flex h-12 items-center justify-between border-b px-4 transition-[background-color,border-color] duration-200 md:hidden ${
             scrolled ? 'material border-black/10' : 'border-transparent bg-canvas'
           }`}
         >
@@ -136,7 +137,7 @@ export function AppShell() {
           <RoleSwitcher placement="topbar" />
         </header>
 
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-5 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-8 md:pt-8 md:pb-12">
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-[calc(3rem+1.25rem)] pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-8 md:pt-8 md:pb-12">
           <Suspense fallback={<PageLoading />}>
             <Outlet />
           </Suspense>

@@ -357,6 +357,13 @@ class ApiIntegrationTests {
                 .as("amy's assignment leaves the owner's student alone").isEqualTo(planId);
 
         assertThat(call(put("/api/students/" + amyOwn + "/coach"), amy[1], Map.of("coachId", st.ownerId())).status()).as("only the owner moves students").isEqualTo(403);
+
+        // A coached session records who taught it: amy for her class, the owner when substituting.
+        String amyClass = "wo_ac" + suffix, subClass = "wo_sc" + suffix;
+        assertThat(call(put("/api/workouts/" + amyClass), amy[1], workout(amyStudent, "coached", "completed")).body().get("coachId").asString()).isEqualTo(amy[0]);
+        assertThat(call(put("/api/workouts/" + subClass), st.owner(), workout(amyStudent, "coached", "completed")).body().get("coachId").asString()).isEqualTo(st.ownerId());
+        assertThat(call(put("/api/workouts/" + amyClass), st.owner(), workout(amyStudent, "coached", "completed")).body().get("coachId").asString())
+                .as("editing keeps who taught").isEqualTo(amy[0]);
         assertThat(call(post("/api/studio/coaches"), amy[1], Map.of("name", "x", "email", "x-" + suffix + "@example.com")).status()).isEqualTo(403);
     }
 

@@ -45,3 +45,7 @@ export const selectIsStudio = (d: AppData) => d.studio?.kind === 'studio'
 export const selectActiveCoaches = (d: AppData) => d.studio?.coaches.filter((c) => c.status === 'active') ?? []
 
 export const selectCoachName = (d: AppData, coachId?: ID) => d.studio?.coaches.find((c) => c.id === coachId)?.name ?? (coachId === d.coach.id ? d.coach.name : '')
+
+/** In a studio, who taught a coached session (a substitute may differ from the student's own coach). */
+export const selectTaughtBy = (d: AppData, w: { type: string; coachId?: ID }) =>
+  w.type === 'coached' && w.coachId && (d.studio?.coaches.length ?? 0) > 1 ? selectCoachName(d, w.coachId) || undefined : undefined

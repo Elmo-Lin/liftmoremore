@@ -1,4 +1,4 @@
-import { CalendarDays, CircleCheck, ClipboardPlus, Dumbbell, Play, Ticket, TriangleAlert, UserPlus, Users } from 'lucide-react'
+import { Building2, CalendarDays, ChevronRight, CircleCheck, ClipboardPlus, Dumbbell, Play, Ticket, TriangleAlert, UserPlus, Users } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { ButtonLink } from '../../components/ui/Button'
@@ -7,8 +7,9 @@ import { WorkoutDetailModal, WorkoutRow } from '../../components/workout/Workout
 import { formatDate, formatTime, givenName, isSameDay, relativeDay } from '../../lib/format'
 import { LOW_BALANCE_THRESHOLD } from '../../lib/sessions'
 import { nextTrainingDay, workoutDate } from '../../lib/stats'
-import { useData } from '../../store/contexts'
-import { selectBalance, selectCompleted, selectDrafts, selectPlan, selectStudent } from '../../store/selectors'
+import { seatsOf, seatsUsed } from '../../store/actions'
+import { useData, useSession } from '../../store/contexts'
+import { selectBalance, selectCoachName, selectCoachOf, selectCompleted, selectDrafts, selectPlan, selectStudent } from '../../store/selectors'
 import type { WorkoutSession } from '../../types'
 
 function greeting(d = new Date()) {
@@ -20,6 +21,9 @@ function greeting(d = new Date()) {
 
 export function CoachDashboardPage() {
   const { data } = useData()
+  const { session } = useSession()
+  // Studio owners see every coach's classes: say whose each one is.
+  const multiCoach = session?.role === 'owner' && (data.studio?.coaches.length ?? 0) > 1
   const [open, setOpen] = useState<WorkoutSession | null>(null)
   const now = new Date()
 
@@ -59,6 +63,25 @@ export function CoachDashboardPage() {
           </>
         }
       />
+
+      {/* Phones: the tab bar has no room for 工作室, so owners get the way in here (desktop has it in the sidebar). */}
+      {session?.role === 'owner' && data.studio && (
+        <Link
+          to="/coach/studio"
+          className="mb-4 flex items-center gap-3 rounded-xl bg-surface px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_0_0_0.5px_rgba(0,0,0,0.04)] active:bg-subtle md:hidden"
+        >
+          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-700">
+            <Building2 className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] font-medium text-ink-900">{data.studio.name || '工作室'}</span>
+            <span className="block text-xs text-ink-500">
+              教練名額 {seatsUsed(data)} / {seatsOf(data)}・管理教練與學員
+            </span>
+          </span>
+          <ChevronRight className="size-4 shrink-0 text-ink-400" />
+        </Link>
+      )}
 
       {drafts.length > 0 && (
         <Link
@@ -116,6 +139,7 @@ export function CoachDashboardPage() {
                         {s.name}
                       </Link>
                       <p className="truncate text-xs text-ink-500">
+                        {multiCoach && `${selectCoachName(data, selectCoachOf(data, s.id))}・`}
                         {day ? `下一堂：${day.name}` : '未指派計畫'}・剩 {bal.remaining} 堂
                       </p>
                     </div>

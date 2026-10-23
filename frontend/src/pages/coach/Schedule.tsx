@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { AppointmentModal } from '../../components/schedule/AppointmentModal'
 import { useRescheduleDrag, type DragState } from '../../components/schedule/useRescheduleDrag'
 import { Button, ButtonLink, IconButton } from '../../components/ui/Button'
-import { Segmented } from '../../components/ui/Form'
+import { ToolbarSelect } from '../../components/ui/Form'
 import { Avatar, Badge, Card, DemoNotice, PageHeader } from '../../components/ui/Primitives'
 import { addDays, formatDate, formatTime, isSameDay, startOfWeek, toDateInput } from '../../lib/format'
 import { endOf, findConflicts, STATUS_LABEL } from '../../lib/schedule'
@@ -23,7 +23,21 @@ export function CoachSchedulePage() {
   // Studio owners see every coach's classes, and can narrow to their own.
   const { session } = useSession()
   const multiCoach = session?.role === 'owner' && (data.studio?.coaches.length ?? 0) > 1
-  const [scope, setScope] = useState<'all' | 'mine'>('all')
+  const coachOptions = (
+    <>
+      <option value="all">全工作室</option>
+      {data.studio?.coaches
+        .filter((c) => c.status !== 'invited')
+        .map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.id === data.coach.id ? `${c.name}（我的課）` : c.name}
+            {c.status === 'inactive' ? '（已停用）' : ''}
+          </option>
+        ))}
+    </>
+  )
+  // 'all', or one coach's ID (the owner's own included).
+  const [scope, setScope] = useState('all')
 
   // Moving keeps the time of day and only changes the date.
   const { drag, start, consumeClick } = useRescheduleDrag({
@@ -50,7 +64,7 @@ export function CoachSchedulePage() {
   const inWeek = data.appointments
     .filter((a) => {
       const t = new Date(a.startAt).getTime()
-      return t >= from && t < to && (scope === 'all' || selectCoachOf(data, a.studentId) === data.coach.id)
+      return t >= from && t < to && (scope === 'all' || selectCoachOf(data, a.studentId) === scope)
     })
     .sort((a, b) => a.startAt.localeCompare(b.startAt))
   const scheduled = inWeek.filter((a) => a.status !== 'cancelled').length
@@ -80,15 +94,15 @@ export function CoachSchedulePage() {
           </Button>
         )}
         {multiCoach && (
-          <div className="ml-auto hidden sm:block">
-            <Segmented label="顯示範圍" size="sm" value={scope} onChange={setScope} options={[{ value: 'all', label: '全工作室' }, { value: 'mine', label: '我的課' }]} />
-          </div>
+          <ToolbarSelect label="顯示哪位教練的課" value={scope} onChange={(e) => setScope(e.target.value)} className="ml-auto hidden h-9 sm:block">
+            {coachOptions}
+          </ToolbarSelect>
         )}
       </div>
       {multiCoach && (
-        <div className="mb-3 sm:hidden">
-          <Segmented label="顯示範圍" size="sm" value={scope} onChange={setScope} options={[{ value: 'all', label: '全工作室' }, { value: 'mine', label: '我的課' }]} />
-        </div>
+        <ToolbarSelect label="顯示哪位教練的課" value={scope} onChange={(e) => setScope(e.target.value)} className="mb-3 h-10 w-full sm:hidden">
+          {coachOptions}
+        </ToolbarSelect>
       )}
       <p className="mb-4 text-[13px] text-ink-500">
         {weekOffset === 0 ? '本週' : weekOffset === 1 ? '下週' : weekOffset === -1 ? '上週' : '這週'} {scheduled} 堂課{cancelled ? `・已取消 ${cancelled} 堂` : ''}

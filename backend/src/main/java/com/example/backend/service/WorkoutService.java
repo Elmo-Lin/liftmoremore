@@ -94,7 +94,9 @@ public class WorkoutService {
             w.createdBy = existing != null ? existing.createdBy : (user.isStudent() ? Domain.STUDENT : Domain.COACH);
             w.billingRevision = existing != null ? existing.billingRevision : 0;
             w.studentId = student.id;
-            w.coachId = "coached".equals(in.type()) ? student.coachId : null;
+            // Who taught a coached session: kept from the first save, else the coach logging it
+            // (in a studio that may be a substitute, not the student's own coach).
+            w.coachId = !"coached".equals(in.type()) ? null : existing != null && existing.coachId != null ? existing.coachId : user.userId();
             w.type = in.type();
             w.status = in.status();
             w.title = in.title() == null || in.title().isBlank() ? "自由訓練" : in.title().trim();
