@@ -19,11 +19,14 @@ import type { AppData, CoachMember } from '../../types'
 
 /** Owners manage their studio here; a free coach sees the upgrade offer; studio coaches never come here. */
 export function StudioPage() {
-  const { data, status } = useData()
+  const { data } = useData()
   const { session } = useSession()
-  // Right after upgrading, the new owner session arrives before the reloaded studio data.
-  if (session?.role === 'owner' && !selectIsStudio(data) && status === 'loading') return <PageLoading />
-  if (session?.role === 'owner' && selectIsStudio(data)) return <ManageStudio />
+  if (session?.role === 'owner') {
+    if (selectIsStudio(data)) return <ManageStudio />
+    // The server always sends an owner their studio: right after upgrading, the new owner session
+    // simply arrives before the reloaded data. Offline there is nothing to wait for.
+    if (isApiMode) return <PageLoading />
+  }
   if (session?.role === 'coach' && !selectIsStudio(data)) return <UpgradeToStudio />
   return <Navigate to="/coach" replace />
 }
