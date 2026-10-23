@@ -81,6 +81,9 @@
 @layer base {
   html {
     color-scheme: light;
+    /* Native rubber-band bounce is kept: at the top the bar is page-coloured (see AppShell), so the
+       area revealed when pulling down matches it instead of showing a blank strip. */
+    background-color: var(--color-canvas);
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
   }
@@ -132,8 +135,8 @@
 /* Translucent "material" for bars (navigation / tab bar). */
 @utility material {
   background-color: rgb(249 249 251 / 0.78);
+  /* Unprefixed only: the build adds -webkit- for Safari. Writing both made it drop the standard one. */
   backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
 }
 
 @utility scrollbar-none {

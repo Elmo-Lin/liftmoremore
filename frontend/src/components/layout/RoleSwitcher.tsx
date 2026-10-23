@@ -247,7 +247,7 @@ function DemoRoleSwitcher({ placement }: { placement: Placement }) {
       <ConfirmDialog
         open={confirmReset}
         title="重設示範資料？"
-        description="所有新增的學員、課表、訓練紀錄與堂數異動都會被清除，並重新產生示範資料。"
+        description="所有新增的學員、課程、訓練計畫、訓練紀錄與堂數異動都會被清除，並重新產生示範資料。"
         confirmLabel="重設"
         tone="danger"
         onConfirm={() => void reset()}

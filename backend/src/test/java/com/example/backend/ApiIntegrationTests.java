@@ -256,6 +256,33 @@ class ApiIntegrationTests {
     }
 
     @Test
+    void coachSchedulesClassesAndStudentsSeeOnlyTheirOwn() throws Exception {
+        String sid = createStudent(coach, "kim");
+        String other = createStudent(coach, "lee");
+        String at = Instant.now().plusSeconds(86400).toString();
+        Map<String, Object> slot = Map.of("studentId", sid, "startAt", at, "durationMin", 60, "location", "工作室");
+        String id = "apt_" + suffix;
+        assertThat(call(put("/api/appointments/" + id), coach, slot).status()).as("client-generated id is accepted").isEqualTo(200);
+        call(put("/api/appointments/apt_o" + suffix), coach, Map.of("studentId", other, "startAt", at, "durationMin", 60, "location", "工作室"));
+
+        Map<String, Object> cancelled = new java.util.HashMap<>(slot);
+        cancelled.put("status", "cancelled");
+        assertThat(call(put("/api/appointments/" + id), coach, cancelled).body().get("status").asString()).isEqualTo("cancelled");
+        assertThat(call(put("/api/appointments/apt_x" + suffix), coach, Map.of("studentId", sid, "startAt", at, "durationMin", 5, "location", "工作室")).status())
+                .as("duration is validated").isEqualTo(400);
+
+        String student = studentToken(sid);
+        JsonNode mine = call(get("/api/appointments"), student, null).body();
+        assertThat(mine.size()).as("students only see their own classes").isEqualTo(1);
+        assertThat(mine.get(0).get("id").asString()).isEqualTo(id);
+        assertThat(call(put("/api/appointments/apt_s" + suffix), student, slot).status()).as("students cannot schedule").isEqualTo(403);
+        assertThat(call(delete("/api/appointments/" + id), student, null).status()).isEqualTo(403);
+
+        assertThat(call(delete("/api/appointments/" + id), coach, null).status()).isEqualTo(204);
+        assertThat(call(get("/api/appointments"), student, null).body().size()).isZero();
+    }
+
+    @Test
     void plansAreCoachAuthoredAndAssignable() throws Exception {
         String sid = createStudent(coach, "hal");
         Map<String, Object> plan = Map.of("name", "肌力 5x5", "goal", "strength", "description", "",

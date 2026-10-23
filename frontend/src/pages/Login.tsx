@@ -145,7 +145,7 @@ function ApiAuthPanel() {
   const [accountType, setAccountType] = useState<'self' | 'coach'>('self')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [form, setForm] = useState({ name: '', email: '', password: '', studio: '', code: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '', studio: '', code: '' })
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null)
     setForm((f) => ({ ...f, [k]: e.target.value }))
@@ -173,8 +173,15 @@ function ApiAuthPanel() {
     }
   }
 
+  // Sign-up and invite activation set a new password, so ask for it twice.
+  const settingPassword = tab !== 'login'
+  const [submitted, setSubmitted] = useState(false)
+  const mismatch = settingPassword && (form.confirm !== '' || submitted) && form.confirm !== form.password
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
+    setSubmitted(true)
+    if (settingPassword && form.confirm !== form.password) return // shown under the confirm field
     if (tab === 'login') void run(() => login(form.email, form.password))
     if (tab === 'register' && accountType === 'self') void run(() => registerSelf({ name: form.name, email: form.email, password: form.password }))
     if (tab === 'register' && accountType === 'coach') void run(() => registerCoach({ name: form.name, email: form.email, password: form.password, studio: form.studio }))
@@ -192,6 +199,7 @@ function ApiAuthPanel() {
           onChange={(t) => {
             setTab(t)
             setError(null)
+            setSubmitted(false)
           }}
           options={[
             { value: 'demo', label: '示範' },
@@ -204,7 +212,7 @@ function ApiAuthPanel() {
 
       {tab === 'demo' ? (
         <div className="mt-5 space-y-3">
-          <RoleButton icon={ClipboardList} title="以示範教練進入" text="Jason Lin・11 位示範學員" onClick={() => enterDemo('coach')} />
+          <RoleButton icon={ClipboardList} title="以示範教練進入" text="Jason Lin・12 位示範學員" onClick={() => enterDemo('coach')} />
           <RoleButton icon={UserRound} title="以示範學員進入" text="Emily Chen・查看課表與進步" onClick={() => enterDemo('student')} />
           <p className="text-xs leading-relaxed text-ink-500">不需要帳號。示範資料只存在這個瀏覽器，可以隨意操作，不會影響任何人。</p>
         </div>
@@ -246,6 +254,16 @@ function ApiAuthPanel() {
             autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
             hint={tab === 'login' ? undefined : '至少 8 個字元'}
           />
+          {settingPassword && (
+            <TextInput
+              label="再次輸入密碼"
+              type="password"
+              value={form.confirm}
+              onChange={set('confirm')}
+              autoComplete="new-password"
+              error={mismatch ? (form.confirm ? '兩次輸入的密碼不一致' : '請再次輸入密碼') : undefined}
+            />
+          )}
           {tab === 'register' && accountType === 'coach' && <TextInput label="工作室名稱（選填）" value={form.studio} onChange={set('studio')} />}
           <Button type="submit" size="lg" className="w-full" disabled={busy}>
             {busy ? '處理中…' : tab === 'login' ? '登入' : tab === 'register' ? (accountType === 'self' ? '建立帳號' : '建立教練帳號') : '啟用學員帳號'}

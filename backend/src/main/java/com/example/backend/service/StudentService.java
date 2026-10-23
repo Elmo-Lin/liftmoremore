@@ -164,7 +164,7 @@ public class StudentService {
         Domain.require(Domain.STUDENT_STATUSES, in.status(), "status");
         if (in.birthYear() != null && in.birthYear() > Year.now().getValue() - 10) throw ApiException.badRequest("出生年份不合理");
         if (in.activePlanId() != null && !Db.await(db.coachDoc(user.userId(), Db.PLANS, in.activePlanId()).get()).exists()) {
-            throw ApiException.badRequest("找不到指派的課表");
+            throw ApiException.badRequest("找不到指派的計畫");
         }
     }
 

@@ -88,6 +88,9 @@ export function StudentDashboardPage() {
           ) : (
             <p className="mt-2 text-sm text-ink-500">目前沒有排定的課程</p>
           )}
+          <Link to="/student/plan" className="mt-3 inline-block text-xs font-medium text-accent-700 hover:underline">
+            查看課表
+          </Link>
         </Card>
         <Card className="p-5">
           <div className="flex items-center justify-between text-[13px] text-ink-500">
@@ -124,12 +127,12 @@ export function StudentDashboardPage() {
         {!isSelf && (
         <Card>
           <CardHeader
-            title="我的課表"
+            title="訓練計畫"
             description={plan ? plan.name : undefined}
             action={
               plan && (
-                <Link to="/student/plan" className="text-xs font-medium text-accent-700 hover:underline">
-                  查看完整課表
+                <Link to="/student/plan?tab=plan" className="text-xs font-medium text-accent-700 hover:underline">
+                  查看完整計畫
                 </Link>
               )
             }
@@ -146,7 +149,7 @@ export function StudentDashboardPage() {
               </div>
             </div>
           ) : (
-            <EmptyState compact icon={ClipboardList} title="教練尚未指派課表" description="你仍可以從空白開始記錄自主訓練。" />
+            <EmptyState compact icon={ClipboardList} title="教練尚未指派訓練計畫" description="你仍可以從空白開始記錄自主訓練。" />
           )}
         </Card>
         )}

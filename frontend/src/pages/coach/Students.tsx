@@ -119,7 +119,7 @@ export function StudentsPage() {
                 <tr>
                   <th className="px-5 py-2.5 font-medium">學員</th>
                   <th className="px-3 py-2.5 font-medium">訓練目標</th>
-                  <th className="px-3 py-2.5 font-medium">課表</th>
+                  <th className="px-3 py-2.5 font-medium">計畫</th>
                   <th className="w-40 px-3 py-2.5 font-medium">剩餘堂數</th>
                   <th className="px-3 py-2.5 font-medium">上次訓練</th>
                   <th className="w-8" />

@@ -20,11 +20,11 @@ export function PlansPage() {
   return (
     <div>
       <PageHeader
-        title="訓練課表"
-        description="建立可重複使用的課表範本，並指派給學員"
+        title="訓練計畫"
+        description="建立可重複使用的計畫範本，並指派給學員"
         actions={
           <ButtonLink to="/coach/plans/new" icon={Plus}>
-            建立課表
+            建立計畫
           </ButtonLink>
         }
       />
@@ -33,17 +33,17 @@ export function PlansPage() {
         <Card>
           <EmptyState
             icon={ClipboardList}
-            title="還沒有課表"
-            description="建立第一份課表，之後記錄訓練時可直接帶入動作與組數。"
+            title="還沒有計畫"
+            description="建立第一份計畫，之後記錄訓練時可直接帶入動作與組數。"
             action={
               <ButtonLink to="/coach/plans/new" icon={Plus}>
-                建立課表
+                建立計畫
               </ButtonLink>
             }
           />
         </Card>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {plans.map((p) => {
             const assigned = data.students.filter((s) => s.activePlanId === p.id)
             const exerciseCount = p.days.reduce((n, d) => n + d.exercises.length, 0)
@@ -79,20 +79,21 @@ export function PlansPage() {
                             </span>
                           ))}
                         </span>
-                        <span className="text-xs text-ink-600">{assigned.length} 位學員</span>
+                        <span className="text-xs whitespace-nowrap text-ink-600">{assigned.length} 位學員</span>
                       </>
                     ) : (
                       <span className="text-xs text-ink-400">尚未指派</span>
                     )}
                   </button>
                   <div className="flex items-center gap-0.5">
-                    <Button variant="secondary" size="sm" icon={UserPlus} onClick={() => setAssigning(p)}>
-                      指派
+                    {/* Icon-only on narrow phones; the student avatars on the left open the same dialog. */}
+                    <Button variant="secondary" size="sm" icon={UserPlus} onClick={() => setAssigning(p)} aria-label="指派">
+                      <span className="hidden min-[400px]:inline">指派</span>
                     </Button>
                     <IconButton icon={Pencil} label="編輯" onClick={() => navigate(`/coach/plans/${p.id}`)} />
                     <IconButton
                       icon={Copy}
-                      label="複製課表"
+                      label="複製計畫"
                       onClick={() => {
                         const res = actions.duplicatePlan(p.id)
                         if (res.ok) notify(`已建立「${res.value.name}」`)
@@ -114,14 +115,14 @@ export function PlansPage() {
         title={`刪除「${deleting?.name}」？`}
         description={(() => {
           const n = data.students.filter((s) => s.activePlanId === deleting?.id).length
-          return n ? `目前有 ${n} 位學員使用此課表，刪除後將取消指派。過去的訓練紀錄會保留。` : '過去的訓練紀錄會保留。'
+          return n ? `目前有 ${n} 位學員使用此計畫，刪除後將取消指派。過去的訓練紀錄會保留。` : '過去的訓練紀錄會保留。'
         })()}
         confirmLabel="刪除"
         tone="danger"
         onCancel={() => setDeleting(null)}
         onConfirm={() => {
           if (deleting) actions.deletePlan(deleting.id)
-          notify('課表已刪除')
+          notify('計畫已刪除')
           setDeleting(null)
         }}
       />

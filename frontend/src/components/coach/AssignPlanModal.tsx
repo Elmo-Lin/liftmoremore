@@ -33,8 +33,8 @@ export function AssignPlanModal({ plan, onClose }: { plan: TrainingPlan; onClose
     <Modal
       open
       onClose={onClose}
-      title="指派課表"
-      description={`${plan.name}・每位學員同時只會有一份進行中的課表`}
+      title="指派計畫"
+      description={`${plan.name}・每位學員同時只會有一份進行中的計畫`}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} className="h-11 md:h-10">
@@ -65,7 +65,7 @@ export function AssignPlanModal({ plan, onClose }: { plan: TrainingPlan; onClose
                     {s.status === 'inactive' && <Badge>暫停</Badge>}
                   </p>
                   <p className="truncate text-xs text-ink-500">
-                    {other ? (on ? `將取代「${other.name}」` : `目前：${other.name}`) : on ? '已指派' : '未指派課表'}
+                    {other ? (on ? `將取代「${other.name}」` : `目前：${other.name}`) : on ? '已指派' : '未指派計畫'}
                   </p>
                 </div>
                 <span className={`inline-flex size-5 items-center justify-center rounded border ${on ? 'border-accent-600 bg-accent-600 text-white' : 'border-line-strong'}`}>

@@ -1,16 +1,16 @@
 import {
+  CalendarDays,
   ChartLine,
   ClipboardList,
   Dumbbell,
   History,
   House,
   LayoutDashboard,
-  ListChecks,
   TrendingUp,
   Users,
   type LucideIcon,
 } from 'lucide-react'
-import { Suspense } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router'
 import { BRAND } from '../../config/brand'
 import { useSession } from '../../store/contexts'
@@ -24,19 +24,23 @@ interface NavItem {
   icon: LucideIcon
   end?: boolean
   primary?: boolean
+  /** Sidebar only: the phone tab bar holds at most 5 items. */
+  desktopOnly?: boolean
 }
 
 const COACH_NAV: NavItem[] = [
   { to: '/coach', label: '總覽', icon: LayoutDashboard, end: true },
   { to: '/coach/students', label: '學員', icon: Users },
   { to: '/coach/workouts/new', label: '記錄訓練', short: '記錄', icon: Dumbbell, primary: true },
-  { to: '/coach/plans', label: '訓練課表', short: '課表', icon: ClipboardList },
-  { to: '/coach/analytics', label: '數據分析', short: '數據', icon: ChartLine },
+  { to: '/coach/schedule', label: '課表', icon: CalendarDays },
+  { to: '/coach/plans', label: '訓練計畫', short: '計畫', icon: ClipboardList },
+  // On phones: from a student's 進步 tab.
+  { to: '/coach/analytics', label: '數據分析', short: '數據', icon: ChartLine, desktopOnly: true },
 ]
 
 const STUDENT_NAV: NavItem[] = [
   { to: '/student', label: '首頁', icon: House, end: true },
-  { to: '/student/plan', label: '我的課表', short: '課表', icon: ListChecks },
+  { to: '/student/plan', label: '我的課表', short: '課表', icon: CalendarDays },
   { to: '/student/workouts/new', label: '自主訓練', short: '訓練', icon: Dumbbell, primary: true },
   { to: '/student/history', label: '訓練紀錄', short: '紀錄', icon: History },
   { to: '/student/progress', label: '進步追蹤', short: '進步', icon: TrendingUp },
@@ -62,9 +66,23 @@ export function Logo() {
   )
 }
 
+/** Whether the page has scrolled away from the top (drives the top bar's scroll-edge appearance). */
+function useScrolled() {
+  const [scrolled, setScrolled] = useState(() => window.scrollY > 0)
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 0)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+  return scrolled
+}
+
 export function AppShell() {
+  const scrolled = useScrolled()
   const { session } = useSession()
   const nav = session?.role === 'self' ? SELF_NAV : session?.role === 'student' ? STUDENT_NAV : COACH_NAV
+  const tabBar = nav.filter((item) => !item.desktopOnly)
 
   return (
     <div className="min-h-dvh md:flex">
@@ -98,8 +116,14 @@ export function AppShell() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Mobile top bar */}
-        <header className="material sticky top-0 z-30 flex h-12 items-center justify-between border-b border-black/10 px-4 md:hidden">
+        {/* Mobile top bar. iOS scroll-edge style: transparent at the top (blending into the status bar,
+            which shows the page background in the installed app), material + hairline once content
+            scrolls underneath. */}
+        <header
+          className={`sticky top-0 z-30 flex h-12 items-center justify-between border-b px-4 transition-[background-color,border-color] duration-200 md:hidden ${
+            scrolled ? 'material border-black/10' : 'border-transparent bg-canvas'
+          }`}
+        >
           <Logo />
           <RoleSwitcher placement="topbar" />
         </header>
@@ -114,9 +138,9 @@ export function AppShell() {
       {/* Mobile bottom nav */}
       <nav
         aria-label="主要導覽"
-        className={`material fixed inset-x-0 bottom-0 z-40 grid ${nav.length === 4 ? 'grid-cols-4' : 'grid-cols-5'} border-t border-black/10 pb-[env(safe-area-inset-bottom)] md:hidden`}
+        className={`material fixed inset-x-0 bottom-0 z-40 grid ${tabBar.length === 4 ? 'grid-cols-4' : 'grid-cols-5'} border-t border-black/10 pb-[env(safe-area-inset-bottom)] md:hidden`}
       >
-        {nav.map((item) => (
+        {tabBar.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

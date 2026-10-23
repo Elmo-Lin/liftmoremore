@@ -1,0 +1,24 @@
+<!--
+  Source of the PWA / home-screen icons in public/icons (full-bleed square: the OS applies its own
+  rounding, and the glyph stays inside the maskable safe zone). After editing, re-render from frontend/:
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars \
+    --user-data-dir="$(mktemp -d)" --force-device-scale-factor=1 --window-size=1024,1024 \
+    --screenshot=/tmp/app-icon.png "file://$PWD/scripts/app-icon.html"
+  for s in 512 192; do sips -z $s $s /tmp/app-icon.png --out public/icons/icon-$s.png; done
+  sips -z 180 180 /tmp/app-icon.png --out public/icons/apple-touch-icon.png
+-->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body { margin: 0; width: 1024px; height: 1024px; overflow: hidden; background: #0071e3; }
+  svg { display: block; width: 1024px; height: 1024px; }
+</style>
+</head>
+<body>
+  <svg viewBox="0 0 32 32">
+    <path d="M9.5 20.5v-9M22.5 20.5v-9M6.5 14v4M25.5 14v4M9.5 16h13" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" fill="none" />
+  </svg>
+</body>
+</html>

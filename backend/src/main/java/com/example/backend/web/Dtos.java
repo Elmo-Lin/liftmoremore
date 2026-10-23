@@ -72,11 +72,11 @@ public final class Dtos {
             String id,
             String coachId,
             String authorRole,
-            @NotBlank(message = "請輸入課表名稱") @Size(max = 60) String name,
+            @NotBlank(message = "請輸入計畫名稱") @Size(max = 60) String name,
             @Size(max = 500) String description,
             @NotBlank String goal,
             Integer weeks,
-            @NotNull @Size(min = 1, message = "課表至少需要一個訓練日") @Valid List<TrainingDayDto> days,
+            @NotNull @Size(min = 1, message = "計畫至少需要一個訓練日") @Valid List<TrainingDayDto> days,
             Instant createdAt,
             Instant updatedAt) {}
 

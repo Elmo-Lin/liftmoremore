@@ -51,7 +51,7 @@ export function CoachDashboardPage() {
               新增學員
             </ButtonLink>
             <ButtonLink to="/coach/plans/new" variant="secondary" icon={ClipboardPlus}>
-              建立課表
+              建立計畫
             </ButtonLink>
             <ButtonLink to="/coach/workouts/new" icon={Dumbbell} variant="accent">
               開始訓練
@@ -87,9 +87,16 @@ export function CoachDashboardPage() {
         />
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <Card>
-          <CardHeader title="今日課程" description="示範排程" />
+          <CardHeader
+            title="今日課程"
+            action={
+              <Link to="/coach/schedule" className="text-xs font-medium text-accent-700 hover:underline">
+                完整課表
+              </Link>
+            }
+          />
           {todays.length ? (
             <ul className="divide-y divide-line border-t border-line">
               {todays.map((a) => {
@@ -109,7 +116,7 @@ export function CoachDashboardPage() {
                         {s.name}
                       </Link>
                       <p className="truncate text-xs text-ink-500">
-                        {day ? `下一堂：${day.name}` : '未指派課表'}・剩 {bal.remaining} 堂
+                        {day ? `下一堂：${day.name}` : '未指派計畫'}・剩 {bal.remaining} 堂
                       </p>
                     </div>
                     {done ? (

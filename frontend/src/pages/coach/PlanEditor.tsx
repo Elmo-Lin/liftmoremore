@@ -45,7 +45,7 @@ export function PlanEditorPage() {
   if (!isNew && !existing) {
     return (
       <Card>
-        <EmptyState icon={ClipboardX} title="找不到此課表" description="課表可能已被刪除。" action={<ButtonLink to="/coach/plans">回到課表列表</ButtonLink>} />
+        <EmptyState icon={ClipboardX} title="找不到此計畫" description="計畫可能已被刪除。" action={<ButtonLink to="/coach/plans">回到計畫列表</ButtonLink>} />
       </Card>
     )
   }
@@ -75,8 +75,8 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
 
   const save = (): TrainingPlan | null => {
     if (!plan.name.trim()) {
-      setNameError('請輸入課表名稱')
-      notify('請輸入課表名稱', 'error')
+      setNameError('請輸入計畫名稱')
+      notify('請輸入計畫名稱', 'error')
       return null
     }
     const res = actions.savePlan(plan)
@@ -85,7 +85,7 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
       return null
     }
     setDirty(false)
-    notify(isNew ? '課表已建立' : '課表已儲存')
+    notify(isNew ? '計畫已建立' : '計畫已儲存')
     if (isNew) navigate(`/coach/plans/${res.value.id}`, { replace: true })
     return res.value
   }
@@ -103,10 +103,10 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
             className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-900"
           >
             <ArrowLeft className="size-4" />
-            訓練課表
+            訓練計畫
           </button>
         }
-        title={isNew ? '建立課表' : '編輯課表'}
+        title={isNew ? '建立計畫' : '編輯計畫'}
         description={savedOnce ? `${assignedCount} 位學員使用中・修改會套用到之後的訓練，過去紀錄不受影響` : '儲存後即可指派給學員'}
         actions={
           <>
@@ -116,7 +116,7 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
               </Button>
             )}
             <Button icon={Save} onClick={save} disabled={!dirty}>
-              {dirty ? '儲存課表' : '已儲存'}
+              {dirty ? '儲存計畫' : '已儲存'}
             </Button>
           </>
         }
@@ -124,7 +124,7 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
 
       <Card className="grid gap-4 p-5 md:grid-cols-[2fr_1fr_1fr]">
         <TextInput
-          label="課表名稱"
+          label="計畫名稱"
           required
           value={plan.name}
           maxLength={40}
@@ -156,7 +156,7 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
           className="min-h-16"
           value={plan.description}
           maxLength={200}
-          placeholder="課表目的、適合對象、進步方式…"
+          placeholder="計畫目的、適合對象、進步方式…"
           onChange={(e) => edit((p) => ({ ...p, description: e.target.value }))}
         />
       </Card>
@@ -311,7 +311,7 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
           <div className="flex items-center gap-3 material rounded-2xl ring-1 ring-black/5 p-2 pl-4 shadow-xl shadow-black/10">
             <p className="flex-1 text-sm text-ink-600">有尚未儲存的變更</p>
             <Button icon={Save} className="h-11" onClick={save}>
-              儲存課表
+              儲存計畫
             </Button>
           </div>
         </div>
@@ -344,7 +344,7 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
         open={leaving}
         onClose={() => setLeaving(false)}
         title="離開前要儲存嗎？"
-        description="你有尚未儲存的課表變更。"
+        description="你有尚未儲存的計畫變更。"
         size="sm"
         footer={
           <>

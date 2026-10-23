@@ -119,7 +119,7 @@ function buildPlans(now: number): TrainingPlan[] {
         ['ex_legcurl', 3, '12'],
       ]),
     ], 150, now),
-    plan('plan_strength', '肌力基礎 5×5', '以複合動作為核心的線性進步課表，每次成功完成即小幅加重。', 'strength', 12, [
+    plan('plan_strength', '肌力基礎 5×5', '以複合動作為核心的線性進步計畫，每次成功完成即小幅加重。', 'strength', 12, [
       day('pst_a', '訓練 A', '深蹲 / 臥推', [
         ['ex_squat', 5, '5'],
         ['ex_bench', 5, '5'],
@@ -239,7 +239,7 @@ const PROFILES: Profile[] = [
       id: 'stu_05', name: 'Tiffany Liu', email: 'tiffany.liu@example.com', phone: '0921-300-457', gender: 'female',
       birthYear: 1985, heightCm: 165, goal: 'general', goalDetail: '建立運動習慣，日常搬重物更輕鬆',
       status: 'active', weeklyFrequency: 2, activePlanId: 'plan_fullbody',
-      coachNotes: '兩個孩子的媽媽，時間以平日上午為主。喜歡有明確進度的課表。',
+      coachNotes: '兩個孩子的媽媽，時間以平日上午為主。喜歡有明確進度的訓練計畫。',
     },
     joinedWeeksAgo: 20, coachedDays: [3], independentDays: [6], hour: 10, strength: 0.45, weeklyRate: 0.02,
     packageSize: 10, pricePerSession: 1800, targetRemaining: 5, bodyweight: 63, bodyweightTrend: -0.1,
@@ -304,6 +304,16 @@ const PROFILES: Profile[] = [
     },
     joinedWeeksAgo: 3, coachedDays: [2, 5], independentDays: [], hour: 18, strength: 0.65, weeklyRate: 0.03,
     packageSize: 20, pricePerSession: 1600, targetRemaining: 16, bodyweight: 88, bodyweightTrend: -0.4,
+  },
+  {
+    student: {
+      id: 'stu_12', name: 'Elmo Lin', email: 'elmo.lin@example.com', phone: '0930-118-526', gender: 'male',
+      birthYear: 1996, heightCm: 178, goal: 'powerlifting', goalDetail: '三大項穩定進步，硬舉突破 180 kg',
+      status: 'active', weeklyFrequency: 4, activePlanId: 'plan_powerlifting',
+      coachNotes: '自主訓練很規律，會自己記錄。硬舉起始姿勢偶爾圓背，熱身時加強髖鉸鏈練習。',
+    },
+    joinedWeeksAgo: 26, coachedDays: [1, 4], independentDays: [3, 6], hour: 20, strength: 1.0, weeklyRate: 0.015,
+    packageSize: 20, pricePerSession: 1700, targetRemaining: 9, bodyweight: 75, bodyweightTrend: 0.05,
   },
 ]
 

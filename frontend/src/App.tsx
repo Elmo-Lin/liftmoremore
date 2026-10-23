@@ -13,6 +13,7 @@ const PlanEditorPage = lazy(() => import('./pages/coach/PlanEditor').then((m) =>
 const PlansPage = lazy(() => import('./pages/coach/Plans').then((m) => ({ default: m.PlansPage })))
 const StudentDetailPage = lazy(() => import('./pages/coach/StudentDetail').then((m) => ({ default: m.StudentDetailPage })))
 const StudentsPage = lazy(() => import('./pages/coach/Students').then((m) => ({ default: m.StudentsPage })))
+const CoachSchedulePage = lazy(() => import('./pages/coach/Schedule').then((m) => ({ default: m.CoachSchedulePage })))
 const CoachWorkoutLoggerPage = lazy(() => import('./pages/coach/WorkoutLogger').then((m) => ({ default: m.CoachWorkoutLoggerPage })))
 const StudentDashboardPage = lazy(() => import('./pages/student/Dashboard').then((m) => ({ default: m.StudentDashboardPage })))
 const StudentHistoryPage = lazy(() => import('./pages/student/History').then((m) => ({ default: m.StudentHistoryPage })))
@@ -58,6 +59,7 @@ export default function App() {
           <Route path="students" element={<StudentsPage />} />
           <Route path="students/:id" element={<StudentDetailPage />} />
           <Route path="workouts/new" element={<CoachWorkoutLoggerPage />} />
+          <Route path="schedule" element={<CoachSchedulePage />} />
           <Route path="plans" element={<PlansPage />} />
           <Route path="plans/:id" element={<PlanEditorPage />} />
           <Route path="analytics" element={<CoachAnalyticsPage />} />

@@ -200,7 +200,7 @@ export function ProgressDashboard({ studentId, audience }: { studentId: ID; audi
         </div>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader title="每週訓練量" description="所有動作的重量 × 次數總和（kg）" />
           <div className="px-3 pb-4">
@@ -228,7 +228,7 @@ export function ProgressDashboard({ studentId, audience }: { studentId: ID; audi
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <Card>
           <CardHeader title="個人紀錄" description="全部歷史中實際完成的最重一組；估算 1RM 僅供參考" />
           <PRTable prs={prs.slice(0, 8)} />

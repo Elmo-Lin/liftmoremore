@@ -278,19 +278,19 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: Exclude<Role, 's
               <span>
                 剩餘堂數 <strong className={`font-semibold ${balance.remaining <= LOW_BALANCE_THRESHOLD ? 'text-warn-600' : 'text-ink-900'}`}>{balance.remaining}</strong> 堂
               </span>
-              <span>課表：{activePlan?.name ?? '未指派'}</span>
+              <span>計畫：{activePlan?.name ?? '未指派'}</span>
               {lastWorkout && <span>上次訓練：{relativeDay(workoutDate(lastWorkout))}</span>}
             </div>
           )}
 
           {!student ? (
-            mode === 'coach' && <p className="mt-4 text-sm text-ink-500">選擇學員後，可從課表、上次訓練或空白開始。</p>
+            mode === 'coach' && <p className="mt-4 text-sm text-ink-500">選擇學員後，可從計畫、上次訓練或空白開始。</p>
           ) : (
             <div className="mt-5 space-y-5">
               {activePlan ? (
                 <div>
                   <p className="mb-2 text-[13px] font-medium text-ink-700">
-                    從課表開始<span className="ml-1.5 font-normal text-ink-500">{activePlan.name}</span>
+                    從計畫開始<span className="ml-1.5 font-normal text-ink-500">{activePlan.name}</span>
                   </p>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {activePlan.days.map((d) => (
@@ -313,7 +313,7 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: Exclude<Role, 's
                 </div>
               ) : (
                 <p className="rounded-lg bg-canvas px-3 py-2.5 text-[13px] text-ink-500">
-                  {mode === 'coach' ? '此學員尚未指派課表，可從空白開始或到「訓練課表」指派。' : isSelf ? '從上次訓練或空白開始記錄。' : '教練尚未指派課表給你，可以從空白開始記錄。'}
+                  {mode === 'coach' ? '此學員尚未指派計畫，可從空白開始或到「訓練計畫」指派。' : isSelf ? '從上次訓練或空白開始記錄。' : '教練尚未指派計畫給你，可以從空白開始記錄。'}
                 </p>
               )}
 
@@ -566,11 +566,11 @@ function OtherPlanPicker({ excludeId, onStart }: { excludeId?: ID; onStart: (p: 
   return (
     <details className="group rounded-xl border border-line px-4 py-3 open:pb-4">
       <summary className="cursor-pointer list-none text-[13px] font-medium text-ink-600 select-none group-open:mb-3">
-        使用其他課表…
+        使用其他計畫…
       </summary>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <select aria-label="選擇課表" className={`${inputClass} h-11 sm:max-w-xs`} value={planId} onChange={(e) => setPlanId(e.target.value)}>
-          <option value="">選擇課表</option>
+        <select aria-label="選擇計畫" className={`${inputClass} h-11 sm:max-w-xs`} value={planId} onChange={(e) => setPlanId(e.target.value)}>
+          <option value="">選擇計畫</option>
           {plans.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}

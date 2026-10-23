@@ -48,9 +48,9 @@ public class PlanService {
     }
 
     public PlanDto get(CurrentUser user, String id) {
-        if (user.isStudent() && !id.equals(access.student(user, user.userId()).activePlanId)) throw ApiException.notFound("找不到課表");
+        if (user.isStudent() && !id.equals(access.student(user, user.userId()).activePlanId)) throw ApiException.notFound("找不到計畫");
         return db.get(db.coachDoc(user.coachId(), Db.PLANS, id), TrainingPlan.class).map(Mapper::plan)
-                .orElseThrow(() -> ApiException.notFound("找不到課表"));
+                .orElseThrow(() -> ApiException.notFound("找不到計畫"));
     }
 
     /** Create or replace a plan (PUT semantics). Days and prescriptions are replaced as a whole. */
@@ -96,7 +96,7 @@ public class PlanService {
 
     public void delete(CurrentUser user, String id) {
         var ref = db.coachDoc(user.requireCoach().userId(), Db.PLANS, id);
-        if (db.get(ref, TrainingPlan.class).isEmpty()) throw ApiException.notFound("找不到課表");
+        if (db.get(ref, TrainingPlan.class).isEmpty()) throw ApiException.notFound("找不到計畫");
         WriteBatch batch = db.fs.batch();
         // Unassign; past workouts keep their planId as a historical reference.
         for (Student s : db.list(db.coachCol(user.userId(), Db.STUDENTS).whereEqualTo("activePlanId", id), Student.class)) {
@@ -109,7 +109,7 @@ public class PlanService {
     /** Sets exactly {@code studentIds} as the students on this plan (others on it are unassigned). */
     public void assign(CurrentUser user, String planId, List<String> studentIds) {
         user.requireCoach();
-        if (db.get(db.coachDoc(user.userId(), Db.PLANS, planId), TrainingPlan.class).isEmpty()) throw ApiException.notFound("找不到課表");
+        if (db.get(db.coachDoc(user.userId(), Db.PLANS, planId), TrainingPlan.class).isEmpty()) throw ApiException.notFound("找不到計畫");
         Set<String> chosen = new HashSet<>(studentIds);
         for (String sid : chosen) access.student(user, sid);
         WriteBatch batch = db.fs.batch();

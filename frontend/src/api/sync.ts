@@ -3,7 +3,7 @@
 // the request is then queued. IDs are generated on the client and accepted by the
 // server, so local and server state stay identical.
 import type { DataActions } from '../store/actions'
-import type { AppData, SessionPackage, Student } from '../types'
+import type { AppData, Appointment, SessionPackage, Student } from '../types'
 
 export interface ApiRequest {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -86,6 +86,10 @@ export function requestsFor(name: Name, args: unknown[], value: unknown, before:
       const p = after.packages.find((x) => x.id === args[0])
       return p ? [{ method: 'PUT', path: `/packages/${p.id}`, body: packageBody(p) }] : null
     }
+    case 'saveAppointments':
+      return (value as Appointment[]).map((a) => ({ method: 'PUT' as const, path: `/appointments/${a.id}`, body: a }))
+    case 'deleteAppointment':
+      return [{ method: 'DELETE', path: `/appointments/${args[0]}` }]
     case 'deletePackage':
       return [{ method: 'DELETE', path: `/packages/${args[0]}` }]
     case 'adjustPackage': {

@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   CalendarDays,
+  ChevronRight,
   ClipboardList,
   Dumbbell,
   History,
@@ -123,7 +124,7 @@ export function StudentDetailPage() {
         tabs={[
           { value: 'overview', label: '總覽' },
           { value: 'history', label: '訓練紀錄', count: workouts.length },
-          { value: 'plans', label: '訓練課表' },
+          { value: 'plans', label: '訓練計畫' },
           { value: 'packages', label: '課程方案' },
           { value: 'progress', label: '進步分析' },
         ]}
@@ -137,6 +138,13 @@ export function StudentDetailPage() {
         {tab === 'progress' && (
           <Suspense fallback={<PageLoading />}>
             <ProgressDashboard studentId={student.id} audience="coach" />
+            <Link
+              to={`/coach/analytics?student=${student.id}`}
+              className="mt-4 flex items-center justify-between rounded-xl bg-surface px-5 py-3.5 text-sm text-ink-700 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_0_0_0.5px_rgba(0,0,0,0.04)] hover:bg-raised"
+            >
+              查看數據分析：課程完成紀錄與學員總覽
+              <ChevronRight className="size-4 text-ink-400" />
+            </Link>
           </Suspense>
         )}
       </div>
@@ -181,7 +189,7 @@ function Overview({ student, onTab, pending }: { student: Student; onTab: (t: Ta
   const current = balance.packages.find((b) => b.remaining > 0) ?? balance.packages.at(-1)
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div className="space-y-4">
         <Card>
           <CardHeader title="訓練目標" />
@@ -290,7 +298,7 @@ function Overview({ student, onTab, pending }: { student: Student; onTab: (t: Ta
           ) : (
             <p className="mt-1 text-sm text-ink-400">尚無排程</p>
           )}
-          <p className="mt-4 text-[13px] text-ink-500">目前課表</p>
+          <p className="mt-4 text-[13px] text-ink-500">目前計畫</p>
           <button type="button" onClick={() => onTab('plans')} className="mt-1 flex items-center gap-2 text-left text-[15px] font-medium text-ink-900 hover:underline">
             <ClipboardList className="size-4 text-ink-400" />
             {plan?.name ?? '未指派'}
@@ -389,7 +397,7 @@ function PlansTab({ student }: { student: Student }) {
   const assign = () => {
     if (!choice) {
       actions.updateStudent(student.id, { activePlanId: undefined })
-      notify('已取消指派課表', 'info')
+      notify('已取消指派計畫', 'info')
       return
     }
     const others = data.students.filter((s) => s.activePlanId === choice && s.id !== student.id).map((s) => s.id)
@@ -401,7 +409,7 @@ function PlansTab({ student }: { student: Student }) {
     <div className="space-y-4">
       <Card className="p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <SelectInput label="指派課表" containerClassName="flex-1" value={choice} onChange={(e) => setChoice(e.target.value)}>
+          <SelectInput label="指派計畫" containerClassName="flex-1" value={choice} onChange={(e) => setChoice(e.target.value)}>
             <option value="">不指派</option>
             {data.plans.map((p) => (
               <option key={p.id} value={p.id}>
@@ -413,7 +421,7 @@ function PlansTab({ student }: { student: Student }) {
             套用
           </Button>
         </div>
-        <p className="mt-2 text-xs text-ink-500">學員可在自己的頁面檢視課表內容，但無法修改教練撰寫的課表。</p>
+        <p className="mt-2 text-xs text-ink-500">學員可在自己的頁面檢視計畫內容，但無法修改教練撰寫的計畫。</p>
       </Card>
       {plan ? (
         <>
@@ -423,10 +431,10 @@ function PlansTab({ student }: { student: Student }) {
               <p className="text-sm text-ink-500">{plan.description}</p>
             </div>
             <ButtonLink to={`/coach/plans/${plan.id}`} variant="secondary" size="sm" icon={Pencil}>
-              編輯課表
+              編輯計畫
             </ButtonLink>
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {plan.days.map((d) => (
               <PlanDayView
                 key={d.id}
@@ -446,9 +454,9 @@ function PlansTab({ student }: { student: Student }) {
         <Card>
           <EmptyState
             icon={ClipboardList}
-            title="尚未指派課表"
-            description="從上方選擇課表，或先建立新的課表。"
-            action={<ButtonLink to="/coach/plans/new">建立課表</ButtonLink>}
+            title="尚未指派計畫"
+            description="從上方選擇計畫，或先建立新的計畫。"
+            action={<ButtonLink to="/coach/plans/new">建立計畫</ButtonLink>}
           />
         </Card>
       )}

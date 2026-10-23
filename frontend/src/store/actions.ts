@@ -5,6 +5,7 @@ import { uid } from '../lib/id'
 import { deductionBlocker, deductionFor, packageBalance, studentBalance } from '../lib/sessions'
 import type {
   AppData,
+  Appointment,
   ID,
   Role,
   SessionPackage,
@@ -25,6 +26,19 @@ export type StudentInput = Pick<
 >
 
 export type PackageInput = Pick<SessionPackage, 'name' | 'totalSessions' | 'priceTwd' | 'purchaseDate' | 'expiresAt' | 'notes'>
+
+export type AppointmentInput = Pick<Appointment, 'studentId' | 'startAt' | 'durationMin' | 'location'>
+
+/** Mirrors the backend's AppointmentDto constraints. */
+export function validateAppointment(input: AppointmentInput): Record<string, string> {
+  const errors: Record<string, string> = {}
+  if (!input.studentId) errors.studentId = '請選擇學員'
+  if (!input.startAt || Number.isNaN(new Date(input.startAt).getTime())) errors.startAt = '請選擇日期與時間'
+  if (!Number.isInteger(input.durationMin) || input.durationMin < 15 || input.durationMin > 240) errors.durationMin = '時長需為 15–240 分鐘'
+  if (!input.location.trim()) errors.location = '請輸入地點'
+  else if (input.location.trim().length > 80) errors.location = '地點最多 80 字'
+  return errors
+}
 
 export function validateStudent(input: StudentInput, others: Student[]): Record<string, string> {
   const errors: Record<string, string> = {}
@@ -119,9 +133,31 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
     },
 
     // ---------------- Plans ----------------
+    /** Creates or updates appointments by id (several at once for a weekly series). Coach only. */
+    saveAppointments(list: Appointment[]): Result<Appointment[]> {
+      if (actor() !== 'coach') return fail('只有教練可以安排課程')
+      const d = get()
+      for (const a of list) {
+        if (!d.students.some((s) => s.id === a.studentId)) return fail('找不到此學員')
+        const first = Object.values(validateAppointment(a))[0]
+        if (first) return fail(first)
+      }
+      const saved = list.map((a) => ({ ...a, coachId: d.coach.id, location: a.location.trim() }))
+      const ids = new Set(saved.map((a) => a.id))
+      update((x) => ({ ...x, appointments: [...x.appointments.filter((a) => !ids.has(a.id)), ...saved] }))
+      return ok(saved)
+    },
+
+    deleteAppointment(id: ID): Result {
+      if (actor() !== 'coach') return fail('只有教練可以安排課程')
+      if (!get().appointments.some((a) => a.id === id)) return fail('找不到此課程')
+      update((x) => ({ ...x, appointments: x.appointments.filter((a) => a.id !== id) }))
+      return ok(undefined)
+    },
+
     savePlan(plan: TrainingPlan): Result<TrainingPlan> {
-      if (!plan.name.trim()) return fail('請輸入課表名稱')
-      if (!plan.days.length) return fail('課表至少需要一個訓練日')
+      if (!plan.name.trim()) return fail('請輸入計畫名稱')
+      if (!plan.days.length) return fail('計畫至少需要一個訓練日')
       const emptyDay = plan.days.find((dy) => !dy.name.trim())
       if (emptyDay) return fail('每個訓練日都需要名稱')
       for (const dy of plan.days)
@@ -139,7 +175,7 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
 
     duplicatePlan(id: ID): Result<TrainingPlan> {
       const src = get().plans.find((p) => p.id === id)
-      if (!src) return fail('找不到課表')
+      if (!src) return fail('找不到計畫')
       const now = nowISO()
       const copy: TrainingPlan = {
         ...structuredClone(src),
@@ -168,7 +204,7 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
 
     /** Sets exactly `studentIds` as the students on this plan. */
     assignPlan(planId: ID, studentIds: ID[]): Result {
-      if (!get().plans.some((p) => p.id === planId)) return fail('找不到課表')
+      if (!get().plans.some((p) => p.id === planId)) return fail('找不到計畫')
       const chosen = new Set(studentIds)
       update((d) => ({
         ...d,
