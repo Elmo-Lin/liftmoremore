@@ -4,9 +4,11 @@ import { Logo } from '../../components/layout/AppShell'
 import { ButtonLink } from '../../components/ui/Button'
 import { BRAND, OPERATOR } from '../../config/brand'
 import { TRIAL_DAYS } from '../../lib/billing'
+import { useScrollTopIfCurrent } from '../../lib/scroll'
 
 /** Header and footer of the public pages: home, privacy policy, terms. */
 export function PublicLayout({ title, children }: { title?: string; children: ReactNode }) {
+  const toTop = useScrollTopIfCurrent('/')
   useEffect(() => {
     document.title = title ? `${title}｜${BRAND.name}` : BRAND.name
     return () => {
@@ -20,7 +22,7 @@ export function PublicLayout({ title, children }: { title?: string; children: Re
     <div className="flex min-h-dvh flex-col bg-canvas pt-14">
       <header className="material fixed inset-x-0 top-0 z-30 border-b border-black/10">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 md:px-8">
-          <Link to="/" aria-label={`${BRAND.name} 首頁`}>
+          <Link to="/" onClick={toTop} aria-label={`${BRAND.name} 首頁`} className="-m-1 rounded-lg p-1">
             <Logo />
           </Link>
           <nav className="ml-auto flex items-center gap-1 text-sm" aria-label="網站導覽">

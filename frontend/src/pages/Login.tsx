@@ -26,7 +26,7 @@ const PANEL_CLASS = 'rounded-2xl bg-surface p-6 shadow-[0_1px_2px_rgba(0,0,0,0.0
 function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col items-center bg-canvas px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:justify-center md:py-10">
-      <Link to="/" aria-label={`${BRAND.name} 首頁`} className="mb-5">
+      <Link to="/" aria-label={`${BRAND.name} 首頁`} className="mb-5 rounded-lg p-1">
         <Logo />
       </Link>
       <div className="w-full max-w-md">{children}</div>

@@ -13,8 +13,10 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { Suspense, useEffect, useState } from 'react'
-import { NavLink, Outlet } from 'react-router'
+import { Link, NavLink, Outlet } from 'react-router'
 import { BRAND } from '../../config/brand'
+import { homePath } from '../../lib/roles'
+import { useScrollTopIfCurrent } from '../../lib/scroll'
 import { useData, useSession } from '../../store/contexts'
 import { selectIsStudio } from '../../store/selectors'
 import { PageLoading } from '../ui/PageLoading'
@@ -76,6 +78,18 @@ export function Logo() {
   )
 }
 
+/** The logo inside the app: back to the signed-in user's home (coach overview, or the student home). */
+function HomeLogo() {
+  const { session } = useSession()
+  const home = homePath(session?.role)
+  const onClick = useScrollTopIfCurrent(home)
+  return (
+    <Link to={home} onClick={onClick} aria-label="回到主畫面" className="-m-1 rounded-lg p-1">
+      <Logo />
+    </Link>
+  )
+}
+
 /** Whether the page has scrolled away from the top (drives the top bar's scroll-edge appearance). */
 function useScrolled() {
   const [scrolled, setScrolled] = useState(() => window.scrollY > 0)
@@ -103,7 +117,7 @@ export function MobileTopBar({ children }: { children?: React.ReactNode }) {
         scrolled ? 'material border-black/10' : 'border-transparent bg-canvas'
       }`}
     >
-      <Logo />
+      <HomeLogo />
       {children}
     </header>
   )
@@ -123,7 +137,7 @@ export function AppShell() {
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-[#f7f7f9] px-3 py-5 md:flex">
         <div className="px-2 pb-6">
-          <Logo />
+          <HomeLogo />
         </div>
         <nav className="flex flex-1 flex-col gap-0.5" aria-label="主要導覽">
           {nav.map((item) => (
