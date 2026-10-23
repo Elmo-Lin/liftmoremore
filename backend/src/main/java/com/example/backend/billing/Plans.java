@@ -11,6 +11,8 @@ import java.time.ZoneId;
  * Prices and what each workspace may do right now. Pure functions, mirrored by
  * frontend/src/lib/billing.ts.
  *
+ * Self-trackers are on the 自主訓練 plan: one person, no add-ons.
+ *
  * Rules: only active students count against the limit (inactive ones keep their history); every
  * coach account that is active or invited takes a seat; going over a limit never deletes anything,
  * it only blocks adding more. When the trial or the paid period lapses the workspace turns
@@ -22,6 +24,7 @@ public final class Plans {
 
     public static final String PRO = "pro";
     public static final String TEAM = "team";
+    public static final String SELF = "self";
 
     public static final int TRIAL_DAYS = 10;
     /** A failed or late renewal keeps the workspace writable this long past the period's end. */
@@ -37,22 +40,29 @@ public final class Plans {
 
     public static final Plan PRO_PLAN = new Plan(PRO, "自由教練 Pro", 399, 30, 1);
     public static final Plan TEAM_PLAN = new Plan(TEAM, "工作室 Team", 999, 100, 3);
+    public static final Plan SELF_PLAN = new Plan(SELF, "自主訓練", 99, 1, 0);
 
     public static Plan plan(String id) {
-        return TEAM.equals(id) ? TEAM_PLAN : PRO_PLAN;
+        return TEAM.equals(id) ? TEAM_PLAN : SELF.equals(id) ? SELF_PLAN : PRO_PLAN;
     }
 
     public static Plan planOf(Coach space) {
-        return Domain.SPACE_STUDIO.equals(space.kind) ? TEAM_PLAN : PRO_PLAN;
+        return isSelf(space) ? SELF_PLAN : Domain.SPACE_STUDIO.equals(space.kind) ? TEAM_PLAN : PRO_PLAN;
     }
 
-    /** Extra coach seats exist only on Team. */
+    /** A self-tracker's one-person space; older ones have no kind, only an ID starting with "self_". */
+    public static boolean isSelf(Coach space) {
+        return Domain.SPACE_SELF.equals(space.kind) || (space.kind == null && space.id != null && space.id.startsWith("self_"));
+    }
+
+    /** Extra student packs exist on Pro and Team, extra coach seats only on Team. */
     public static int monthly(Plan plan, int studentPacks, int coachSeats) {
+        if (SELF.equals(plan.id())) return plan.basePrice();
         return plan.basePrice() + studentPacks * STUDENT_PACK_PRICE + (TEAM.equals(plan.id()) ? coachSeats * COACH_SEAT_PRICE : 0);
     }
 
     public static int studentLimit(Plan plan, int studentPacks) {
-        return plan.includedStudents() + studentPacks * STUDENT_PACK_SIZE;
+        return plan.includedStudents() + (SELF.equals(plan.id()) ? 0 : studentPacks * STUDENT_PACK_SIZE);
     }
 
     public static int coachLimit(Plan plan, int coachSeats) {
@@ -74,9 +84,7 @@ public final class Plans {
     /** What a workspace may do at {@code now}; {@code status} adds "expired" for a lapsed trial or period. */
     public record Access(Plan plan, String status, boolean writable, Instant trialEndsAt, int studentLimit, int coachLimit) {}
 
-    /** Null for self-trackers, who are free and unlimited. */
     public static Access access(Coach space, Instant now) {
-        if (Domain.SPACE_SELF.equals(space.kind)) return null;
         Plan plan = planOf(space);
         Subscription sub = space.subscription;
         Instant trialEnds = trialEndsAt(space);

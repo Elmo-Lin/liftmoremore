@@ -143,7 +143,7 @@ class BillingFlowTests {
         String periodNo = "P" + suffix;
         Resp back = periodCallback("/api/billing/newebpay/period-return", "SUCCESS", sent.get("MerOrderNo"), periodNo, null, 399 + packs * 99);
         assertThat(back.status()).isEqualTo(303);
-        assertThat(back.location()).endsWith("/coach/billing?result=success");
+        assertThat(back.location()).endsWith("/billing?result=success");
         return periodNo;
     }
 
@@ -345,6 +345,37 @@ class BillingFlowTests {
         Resp student = call(post("/api/auth/google"), null, Map.of("credential", "student"));
         assertThat(student.body().get("user").get("role").asString()).isEqualTo("student");
         assertThat(call(get("/api/students/" + sid), coach, null).body().get("activated").asBoolean()).isTrue();
+    }
+
+    @Test
+    void selfTrackersPayForTheirOwnPlan() throws Exception {
+        Resp reg = call(post("/api/auth/register-self"), null, Map.of("name", "自主", "email", "self-" + suffix + "@example.com", "password", "password123"));
+        String self = reg.body().get("token").asString();
+        String selfId = reg.body().get("user").get("userId").asString();
+        JsonNode b = billing(self);
+        assertThat(b.get("plan").asString()).isEqualTo("self");
+        assertThat(b.get("status").asString()).isEqualTo("trialing");
+        assertThat(b.get("monthlyAmount").asInt()).isEqualTo(99);
+        assertThat(b.get("canManage").asBoolean()).isTrue();
+        assertThat(call(post("/api/billing/change"), self, Map.of("plan", "pro", "extraStudentPacks", 1, "extraCoachSeats", 0)).body().get("code").asString())
+                .as("no add-ons or plan changes").isEqualTo("nothing_to_change");
+
+        Coach space = db.get(db.doc(Db.COACHES, selfId), Coach.class).orElseThrow();
+        space.subscription.trialEndsAt = Instant.now().minusSeconds(60);
+        db.set(db.doc(Db.COACHES, selfId), space);
+        Map<String, Object> workout = Map.of("studentId", selfId, "type", "independent", "status", "completed", "title", "A",
+                "startedAt", Instant.now().toString(), "notes", "",
+                "exercises", java.util.List.of(Map.of("id", "el_1", "exerciseId", "ex_squat",
+                        "sets", java.util.List.of(Map.of("id", "set_1", "weightKg", 60, "reps", 5, "completed", true)))));
+        assertThat(call(put("/api/workouts/wo_selfpay" + suffix), self, workout).status()).as("read-only after the trial").isEqualTo(402);
+
+        Resp checkout = call(post("/api/billing/subscribe"), self, Map.of("extraStudentPacks", 3, "extraCoachSeats", 2));
+        Map<String, String> sent = sentToNewebPay(checkout.body().get("fields").get("PostData_").asString());
+        assertThat(sent.get("PeriodAmt")).as("add-ons are ignored for self-trackers").isEqualTo("99");
+        assertThat(sent.get("BackURL")).endsWith("/billing");
+        Resp back = periodCallback("/api/billing/newebpay/period-return", "SUCCESS", sent.get("MerOrderNo"), "PS" + suffix, null, 99);
+        assertThat(back.location()).endsWith("/billing?result=success");
+        assertThat(call(put("/api/workouts/wo_selfpay" + suffix), self, workout).status()).isEqualTo(200);
     }
 
     @Test

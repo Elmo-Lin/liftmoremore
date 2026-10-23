@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { enterLocalDemo, exitLocalDemo, isApiMode, isLocalDemo } from '../../api/client'
 import { demoHome, demoPersonaOf, demoPersonaTitle, demoSession, type DemoPersona } from '../../data/mock'
+import { billingPath } from '../../lib/billing'
 import { isCoachRole, ROLE_LABEL } from '../../lib/roles'
 import { useData, useSession, useToast } from '../../store/contexts'
 import { selectIsStudio } from '../../store/selectors'
@@ -44,7 +45,7 @@ function AccountMenu({ placement }: { placement: Placement }) {
   }
   const goBilling = () => {
     setOpen(false)
-    navigate('/coach/billing')
+    navigate(billingPath(role))
   }
 
   if (placement === 'sidebar') {

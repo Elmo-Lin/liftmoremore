@@ -67,10 +67,9 @@ public class SubscriptionService {
 
     /** Every write outside auth and billing goes through here (see {@link WriteGuard}). */
     public void requireWritable(CurrentUser user) {
-        if (user.isSelf()) return;
         Access a = access(user.coachId());
-        if (a == null || a.writable()) return;
-        throw new ApiException(HttpStatus.PAYMENT_REQUIRED, "subscription_required", user.isCoach()
+        if (a.writable()) return;
+        throw new ApiException(HttpStatus.PAYMENT_REQUIRED, "subscription_required", user.isCoach() || user.isSelf()
                 ? "方案已到期，目前為唯讀。訂閱後即可繼續新增與編輯，資料都還在。"
                 : "教練的方案已到期，暫時無法記錄。請聯絡你的教練。");
     }
@@ -78,7 +77,6 @@ public class SubscriptionService {
     /** Before a student becomes active (added as active, or reactivated). */
     public void requireStudentSlot(CurrentUser user) {
         Access a = access(user.coachId());
-        if (a == null) return;
         long active = Db.await(db.coachCol(user.coachId(), Db.STUDENTS).whereEqualTo("status", "active").count().get()).getCount();
         if (active >= a.studentLimit()) {
             throw ApiException.conflict("student_limit", "活躍學員已達方案上限（" + a.studentLimit() + " 位）。"
@@ -89,13 +87,18 @@ public class SubscriptionService {
     /** Before inviting a coach; {@code used} counts the owner and every active or invited coach. */
     public void requireCoachSeat(String spaceId, long used) {
         Access a = access(spaceId);
-        int seats = a == null ? 1 : a.coachLimit();
+        int seats = a.coachLimit();
         if (used >= seats) throw ApiException.conflict("seats_full", "教練名額已滿（" + seats + " 位，含經營者）。請至「方案與付款」加購教練名額。");
     }
 
-    /** Free coaches and studio owners pay; studio coaches only see the status. */
+    /** Free coaches, studio owners and self-trackers pay; studio coaches only see the status. */
     public static boolean canManage(CurrentUser user) {
-        return user.isOwner() || (user.isCoach() && user.userId().equals(user.coachId()));
+        return user.isOwner() || user.isSelf() || (user.isCoach() && user.userId().equals(user.coachId()));
+    }
+
+    /** Who sees billing: coaches and self-trackers (students are covered by their coach). */
+    public static boolean paysOrSees(CurrentUser user) {
+        return user.isCoach() || user.isSelf();
     }
 
     /** Whether a paid mandate is running (changes then need a prorated payment). */
@@ -108,7 +111,7 @@ public class SubscriptionService {
     /** For coaches; {@code activeStudents} is the whole workspace, {@code hiddenActive} those the caller cannot see. */
     public BillingDto view(CurrentUser user, Coach space, int activeStudents, int hiddenActive) {
         Access a = Plans.access(space, Instant.now());
-        if (a == null || !user.isCoach()) return null;
+        if (!paysOrSees(user)) return null;
         Subscription sub = space.subscription;
         int packs = sub == null ? 0 : sub.extraStudentPacks;
         int seats = sub == null ? 0 : sub.extraCoachSeats;
@@ -120,7 +123,7 @@ public class SubscriptionService {
     }
 
     public BillingOverviewDto overview(CurrentUser user) {
-        user.requireCoach();
+        if (!paysOrSees(user)) throw ApiException.forbidden("方案由你的教練管理");
         Coach space = space(user.coachId());
         List<Student> students = db.list(db.coachCol(user.coachId(), Db.STUDENTS).whereEqualTo("status", "active"), Student.class);
         int visible = (int) students.stream().filter(s -> user.isOwner() || !user.isStudioCoach() || user.userId().equals(s.coach())).count();
@@ -144,14 +147,15 @@ public class SubscriptionService {
             throw ApiException.conflict("already_subscribed", "已經在訂閱中，如需調整請使用「變更方案」");
         }
         Plan plan = Plans.planOf(space);
+        int packs = Plans.SELF.equals(plan.id()) ? 0 : in.extraStudentPacks();
         int seats = Plans.TEAM.equals(plan.id()) ? in.extraCoachSeats() : 0;
-        BillingOrder order = order(space.id, user.userId(), "subscribe", plan.id(), in.extraStudentPacks(), seats);
-        order.monthlyAmount = Plans.monthly(plan, in.extraStudentPacks(), seats);
+        BillingOrder order = order(space.id, user.userId(), "subscribe", plan.id(), packs, seats);
+        order.monthlyAmount = Plans.monthly(plan, packs, seats);
         order.amount = order.monthlyAmount;
         db.create(db.doc(Db.BILLING_ORDERS, order.id), order);
         String email = db.get(db.doc(Db.USERS, user.userId()), UserAccount.class).map(u -> u.email).orElse(null);
         var form = newebPay.periodForm(order.id, order.monthlyAmount, plan.name() + " 月費", email, Instant.now(),
-                apiUrl + "/billing/newebpay/period-return", apiUrl + "/billing/newebpay/period-notify", appUrl + "/coach/billing");
+                apiUrl + "/billing/newebpay/period-return", apiUrl + "/billing/newebpay/period-notify", appUrl + "/billing");
         return new CheckoutDto(form.action(), form.fields());
     }
 
@@ -166,6 +170,8 @@ public class SubscriptionService {
         if (Plans.TEAM.equals(current.id()) && Plans.PRO.equals(target.id())) {
             throw ApiException.conflict("downgrade_unsupported", "工作室方案無法直接改回自由教練，請聯絡我們");
         }
+        if (Plans.SELF.equals(current.id())) throw ApiException.conflict("nothing_to_change", "自主訓練方案沒有可調整的項目");
+        if (Plans.SELF.equals(target.id())) throw ApiException.badRequest("無法改為自主訓練方案");
         boolean upgrading = !current.id().equals(target.id());
         String studioName = in.studioName() == null ? "" : in.studioName().trim();
         if (upgrading && studioName.isEmpty()) throw ApiException.badRequest("請輸入工作室名稱");
@@ -196,7 +202,7 @@ public class SubscriptionService {
             order.nextExtraCoachSeats = nextSeats;
             db.create(db.doc(Db.BILLING_ORDERS, order.id), order);
             var form = newebPay.mpgForm(order.id, charge, target.name() + " 方案調整（本期按比例）", null, now,
-                    apiUrl + "/billing/newebpay/mpg-return", apiUrl + "/billing/newebpay/mpg-notify", appUrl + "/coach/billing");
+                    apiUrl + "/billing/newebpay/mpg-return", apiUrl + "/billing/newebpay/mpg-notify", appUrl + "/billing");
             return new ChangeResultDto(false, new CheckoutDto(form.action(), form.fields()));
         }
         // Only downgrades (or nothing): the mandate charges less from the next period.
@@ -353,10 +359,10 @@ public class SubscriptionService {
         return paid;
     }
 
-    /** Where the browser lands after NewebPay. */
+    /** Where the browser lands after NewebPay; the app sends /billing on to the caller's own billing page. */
     /** {@code result}: success, failed, or pending (unknown yet; the server notification decides). */
     public String returnUrl(String result) {
-        return appUrl + "/coach/billing?result=" + result;
+        return appUrl + "/billing?result=" + result;
     }
 
     // ----------------------------------------------------------------------------- helpers
@@ -392,8 +398,7 @@ public class SubscriptionService {
     }
 
     private void requireManager(CurrentUser user) {
-        user.requireCoach();
-        if (!canManage(user)) throw ApiException.forbidden("只有工作室經營者可以管理方案與付款");
+        if (!canManage(user)) throw ApiException.forbidden(user.isStudent() ? "方案由你的教練管理" : "只有工作室經營者可以管理方案與付款");
     }
 
     private Coach space(String spaceId) {
@@ -405,8 +410,7 @@ public class SubscriptionService {
      * first time they are used after launch (not at sign-up, which would lock them out at once).
      */
     public Coach startTrialIfMissing(Coach space) {
-        // Self-trackers are free; older ones have no kind but an ID starting with "self_".
-        if (space.subscription != null || Domain.SPACE_SELF.equals(space.kind) || space.id.startsWith("self_")) return space;
+        if (space.subscription != null) return space;
         Subscription trial = Plans.trial(Instant.now());
         db.update(db.doc(Db.COACHES, space.id), "subscription", db.encode(trial));
         space.subscription = trial;

@@ -1,6 +1,6 @@
 import { ArrowRight, ChartLine, Dumbbell, Ticket, Users } from 'lucide-react'
 import { useState } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router'
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { activateInvite, googleSignIn, login, registerCoach, registerSelf, registerStudio } from '../api/auth'
 import { API_URL, ApiError, enterLocalDemo, exitLocalDemo, isApiMode } from '../api/client'
 import { GoogleButton } from '../components/auth/GoogleButton'
@@ -31,7 +31,7 @@ function AuthLayout({ children }: { children: React.ReactNode }) {
       {/* Mobile: headline → panel → features, so the panel is reachable without scrolling.
           Desktop: headline and features on the left, the panel on the right. */}
       <MobileTopBar />
-      <div className="mx-auto grid min-h-dvh max-w-6xl content-start gap-6 px-4 pt-[calc(3rem+1.25rem)] pb-6 md:grid-cols-[1.1fr_1fr] md:content-center md:gap-x-16 md:gap-y-8 md:px-8 md:py-8">
+      <div className="mx-auto grid min-h-dvh max-w-6xl content-start gap-6 px-4 pt-17 pb-6 md:grid-cols-[1.1fr_1fr] md:content-center md:gap-x-16 md:gap-y-8 md:px-8 md:py-8">
         <section className="md:col-start-1 md:row-start-1 md:self-end">
           {/* Phones show the logo in the fixed top bar instead. */}
           <div className="hidden md:block">
@@ -120,7 +120,7 @@ type AuthTab = 'login' | 'register' | 'invite'
 type AccountType = 'self' | 'coach' | 'studio'
 
 const ACCOUNT_HINT = {
-  self: '自己記錄訓練、追蹤進步，不需要教練。免費使用。',
+  self: `自己記錄訓練、追蹤進步，不需要教練。免費試用 ${TRIAL_DAYS} 天，不需信用卡；之後 NT$${PLANS.self.price}/月。`,
   coach: `一個人帶學員：管理學員、課表、訓練計畫與堂數。免費試用 ${TRIAL_DAYS} 天，不需信用卡；之後 NT$${PLANS.pro.price}/月。`,
   studio: `工作室經營者：自己也能帶學員，含 ${PLANS.team.coaches} 位教練、${PLANS.team.students} 位活躍學員。免費試用 ${TRIAL_DAYS} 天，之後 NT$${PLANS.team.price}/月。工作室的教練請向經營者索取邀請碼。`,
 } as const
@@ -138,7 +138,9 @@ function ApiAuthPanel() {
   const { signIn } = useSession()
   const navigate = useNavigate()
   const notify = useToast()
-  const [tab, setTab] = useState<AuthTab>('login')
+  const [params] = useSearchParams()
+  // The public pages' "free trial" buttons open the sign-up tab.
+  const [tab, setTab] = useState<AuthTab>(params.get('tab') === 'register' ? 'register' : 'login')
   const [accountType, setAccountType] = useState<AccountType>('self')
   /** A first-time Google user: their token, kept while they pick an account type. */
   const [googleSignup, setGoogleSignup] = useState<string | null>(null)
@@ -252,6 +254,7 @@ function ApiAuthPanel() {
           </Button>
         </form>
         {errorBox}
+        <AgreementNote register />
       </section>
     )
   }
@@ -341,6 +344,28 @@ function ApiAuthPanel() {
         </Button>
       </form>
       {errorBox}
+      <AgreementNote register={tab === 'register'} />
     </section>
+  )
+}
+
+/** Signing up accepts the terms; the links are also how reviewers and visitors find the policies. */
+function AgreementNote({ register }: { register: boolean }) {
+  const link = 'text-accent-700 hover:underline'
+  return (
+    <p className="mt-5 text-center text-xs leading-relaxed text-ink-500">
+      {register ? '註冊即表示你同意' : '使用本服務即表示你同意'}
+      <Link to="/terms" className={link}>
+        服務條款
+      </Link>
+      與
+      <Link to="/privacy" className={link}>
+        隱私權政策
+      </Link>
+      。
+      <Link to="/" className={`ml-2 ${link}`}>
+        回首頁
+      </Link>
+    </p>
   )
 }

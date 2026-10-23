@@ -242,7 +242,7 @@ export interface Studio {
   coaches: CoachMember[]
 }
 
-export type PlanId = 'pro' | 'team'
+export type PlanId = 'pro' | 'team' | 'self'
 /** expired: the trial or paid period lapsed; the workspace is read-only until someone subscribes. */
 export type BillingStatus = 'trialing' | 'active' | 'past_due' | 'canceled' | 'expired'
 

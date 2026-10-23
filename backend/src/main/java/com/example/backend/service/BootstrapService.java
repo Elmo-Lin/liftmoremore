@@ -91,7 +91,7 @@ public class BootstrapService {
                 mine(decode(metrics, ProgressMetric.class), visible, x -> x.studentId).stream().map(Mapper::metric).toList(),
                 mine(decode(appointments, Appointment.class), visible, x -> x.studentId).stream().sorted(Comparator.comparing((Appointment a) -> a.startAt)).map(Mapper::appointment).toList(),
                 studios.studio(user, space),
-                asCoach ? subscriptions.view(user, space, activeCount(all), activeCount(all) - activeCount(roster)) : null);
+                SubscriptionService.paysOrSees(user) ? subscriptions.view(user, space, activeCount(all), activeCount(all) - activeCount(roster)) : null);
     }
 
     private static int activeCount(List<Student> students) {

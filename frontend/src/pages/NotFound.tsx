@@ -6,7 +6,7 @@ import { useSession } from '../store/contexts'
 
 export function NotFoundPage() {
   const { session } = useSession()
-  const home = !session ? '/login' : homePath(session.role)
+  const home = !session ? '/' : homePath(session.role)
   return (
     <div className="flex min-h-dvh items-center justify-center bg-canvas">
       <EmptyState

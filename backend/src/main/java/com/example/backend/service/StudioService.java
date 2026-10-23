@@ -64,7 +64,7 @@ public class StudioService {
         if (!user.isCoach()) return null;
         List<CoachMemberDto> coaches = members(space.id).stream().map(u -> member(u, user.isOwner())).toList();
         Plans.Access plan = Plans.access(space, Instant.now());
-        return new StudioDto(space.id, kindOf(space), space.studio, space.id, plan == null ? null : plan.coachLimit(), coaches);
+        return new StudioDto(space.id, kindOf(space), space.studio, space.id, plan.coachLimit(), coaches);
     }
 
     /**

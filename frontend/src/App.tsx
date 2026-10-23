@@ -1,10 +1,12 @@
-import { lazy, type ReactNode } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router'
 import { AppShell } from './components/layout/AppShell'
 import { ScrollToTop } from './components/layout/ScrollToTop'
 import { DemoPage, LoginPage } from './pages/Login'
 import { NotFoundPage } from './pages/NotFound'
+import { HomePage } from './pages/public/Home'
 import { useData, useSession } from './store/contexts'
+import { billingPath } from './lib/billing'
 import { homePath, isCoachRole } from './lib/roles'
 
 const CoachAnalyticsPage = lazy(() => import('./pages/coach/Analytics').then((m) => ({ default: m.CoachAnalyticsPage })))
@@ -22,6 +24,8 @@ const StudentDashboardPage = lazy(() => import('./pages/student/Dashboard').then
 const StudentHistoryPage = lazy(() => import('./pages/student/History').then((m) => ({ default: m.StudentHistoryPage })))
 const StudentPlanPage = lazy(() => import('./pages/student/Plan').then((m) => ({ default: m.StudentPlanPage })))
 const StudentProgressPage = lazy(() => import('./pages/student/Progress').then((m) => ({ default: m.StudentProgressPage })))
+const PrivacyPage = lazy(() => import('./pages/public/Legal').then((m) => ({ default: m.PrivacyPage })))
+const TermsPage = lazy(() => import('./pages/public/Legal').then((m) => ({ default: m.TermsPage })))
 const StudentWorkoutPage = lazy(() => import('./pages/student/Workout').then((m) => ({ default: m.StudentWorkoutPage })))
 
 function RequireRole({ role, children }: { role: 'coach' | 'student'; children: ReactNode }) {
@@ -37,10 +41,19 @@ function RequireRole({ role, children }: { role: 'coach' | 'student'; children: 
   return <>{children}</>
 }
 
-function HomeRedirect() {
+/** Visitors see the public home page (what it is, prices, policies); signed-in users go to their app. */
+function Home() {
   const { session } = useSession()
-  if (!session) return <Navigate to="/login" replace />
+  if (!session) return <HomePage />
   return <Navigate to={homePath(session.role)} replace />
+}
+
+/** NewebPay sends everyone back to /billing; forward to the signed-in user's own billing page, keeping ?result. */
+function BillingRedirect() {
+  const { session } = useSession()
+  const { search } = useLocation()
+  if (!session) return <Navigate to="/login" replace />
+  return <Navigate to={`${billingPath(session.role)}${search}`} replace />
 }
 
 export default function App() {
@@ -48,7 +61,9 @@ export default function App() {
     <BrowserRouter>
       <ScrollToTop />
       <Routes>
-        <Route path="/" element={<HomeRedirect />} />
+        <Route path="/" element={<Home />} />
+        <Route path="/privacy" element={<Suspense fallback={null}><PrivacyPage /></Suspense>} />
+        <Route path="/terms" element={<Suspense fallback={null}><TermsPage /></Suspense>} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/demo" element={<DemoPage />} />
         <Route
@@ -84,7 +99,9 @@ export default function App() {
           <Route path="history" element={<StudentHistoryPage />} />
           <Route path="progress" element={<StudentProgressPage />} />
           <Route path="workouts/new" element={<StudentWorkoutPage />} />
+          <Route path="billing" element={<BillingPage />} />
         </Route>
+        <Route path="/billing" element={<BillingRedirect />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>

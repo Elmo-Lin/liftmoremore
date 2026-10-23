@@ -1,15 +1,17 @@
 import { ArrowRight } from 'lucide-react'
 import { Link, useLocation } from 'react-router'
-import { daysLeft } from '../../lib/billing'
+import { billingPath, daysLeft } from '../../lib/billing'
 import { formatDate } from '../../lib/format'
-import { useData } from '../../store/contexts'
+import { useData, useSession } from '../../store/contexts'
 
-/** Trial countdown, read-only notice and failed payments, above every coach page (except billing itself). */
+/** Trial countdown, read-only notice and failed payments, above every page of a paying user (except billing itself). */
 export function BillingBanner() {
   const { data } = useData()
+  const { session } = useSession()
   const { pathname } = useLocation()
   const b = data.billing
-  if (!b || pathname.startsWith('/coach/billing')) return null
+  const target = billingPath(session?.role)
+  if (!b || pathname.startsWith(target)) return null
 
   const days = daysLeft(b.trialEndsAt)
   const message =
@@ -35,7 +37,7 @@ export function BillingBanner() {
     >
       <span className="flex-1">{message}</span>
       {b.canManage && (
-        <Link to="/coach/billing" className="inline-flex items-center gap-1 font-medium whitespace-nowrap hover:underline">
+        <Link to={target} className="inline-flex items-center gap-1 font-medium whitespace-nowrap hover:underline">
           {action}
           <ArrowRight className="size-3.5" />
         </Link>

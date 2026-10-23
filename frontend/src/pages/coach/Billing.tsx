@@ -1,6 +1,6 @@
 import { Check, CreditCard, Minus, Plus, Receipt } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { refreshSession } from '../../api/auth'
 import { cancelSubscription, changePlan, fetchBilling, goToCheckout, subscribe, type Payment } from '../../api/billing'
 import { isApiMode } from '../../api/client'
@@ -10,6 +10,7 @@ import { ConfirmDialog } from '../../components/ui/Modal'
 import { PageLoading } from '../../components/ui/PageLoading'
 import { Badge, Card, CardHeader, EmptyState, PageHeader } from '../../components/ui/Primitives'
 import {
+  BILLING_RULES,
   coachLimit,
   COACH_SEAT_PRICE,
   daysLeft,
@@ -29,13 +30,6 @@ import type { Billing, PlanId } from '../../types'
 
 const PAYMENT_LABEL: Record<Payment['kind'], string> = { subscription: '首期月費', renewal: '月費', proration: '加購（本期按比例）' }
 
-const RULES = [
-  '活躍學員才佔名額：已結案、停用的學員不計費，歷史資料仍保留。',
-  '教練名額按帳號計算：邀請一位教練就佔一個名額；停用或移除後釋出。',
-  '超過名額不會刪除資料，只會暫停新增學員或教練。',
-  '加購立即生效，本期按剩餘天數比例收費；減少名額於下個計費週期生效。',
-  '同一位學員在同一工作室只算一次，不會因為兩位教練共同管理而重複計費。',
-]
 
 export function BillingPage() {
   const { data, status, reload } = useData()
@@ -106,7 +100,7 @@ export function BillingPage() {
         <Card className="p-5">
           <p className="text-sm font-medium text-ink-900">計費方式</p>
           <ul className="mt-3 space-y-2 text-[13px] leading-relaxed text-ink-600">
-            {RULES.map((r) => (
+            {BILLING_RULES.map((r) => (
               <li key={r} className="flex gap-2">
                 <Check className="mt-0.5 size-3.5 shrink-0 text-accent-600" />
                 {r}
@@ -152,10 +146,12 @@ function StatusCard({ billing: b, coachesUsed }: { billing: Billing; coachesUsed
           {b.nextExtraCoachSeats != null && `加購教練 ${b.nextExtraCoachSeats} 位`}
         </p>
       )}
-      <div className={`mt-4 grid gap-4 ${b.plan === 'team' ? 'sm:grid-cols-2' : ''}`}>
-        <Usage label="活躍學員" used={b.activeStudents} limit={b.studentLimit} />
-        {b.plan === 'team' && <Usage label="教練（含經營者）" used={coachesUsed} limit={b.coachLimit} />}
-      </div>
+      {b.plan !== 'self' && (
+        <div className={`mt-4 grid gap-4 ${b.plan === 'team' ? 'sm:grid-cols-2' : ''}`}>
+          <Usage label="活躍學員" used={b.activeStudents} limit={b.studentLimit} />
+          {b.plan === 'team' && <Usage label="教練（含經營者）" used={coachesUsed} limit={b.coachLimit} />}
+        </div>
+      )}
     </Card>
   )
 }
@@ -245,7 +241,7 @@ function PlanEditor({ billing: b }: { billing: Billing }) {
   return (
     <Card>
       <CardHeader
-        title={paying && b.status === 'active' ? '調整方案' : b.status === 'trialing' ? '選擇方案' : '訂閱'}
+        title={b.plan === 'self' ? '訂閱' : paying && b.status === 'active' ? '調整方案' : b.status === 'trialing' ? '選擇方案' : '訂閱'}
         description={paying && b.status === 'active' ? '加購立即生效（本期按比例收費）；減少名額下期生效' : `${PLANS[plan].name}・每月 ${twd(PLANS[plan].price)} 起`}
       />
       <div className="space-y-5 border-t border-line p-5">
@@ -267,21 +263,16 @@ function PlanEditor({ billing: b }: { billing: Billing }) {
           </div>
         )}
         {upgrading && <TextInput label="工作室名稱" required maxLength={120} value={studioName} onChange={(e) => setStudioName(e.target.value)} />}
-        <Stepper
-          label="加購學員名額"
-          hint={`每 ${STUDENT_PACK.size} 位 ${twd(STUDENT_PACK.price)}/月`}
-          value={packs}
-          max={MAX_STUDENT_PACKS}
-          unit="組"
-          onChange={setPacks}
-        />
+        {plan !== 'self' && (
+          <Stepper label="加購學員名額" hint={`每 ${STUDENT_PACK.size} 位 ${twd(STUDENT_PACK.price)}/月`} value={packs} max={MAX_STUDENT_PACKS} unit="組" onChange={setPacks} />
+        )}
         {plan === 'team' && (
           <Stepper label="加購教練名額" hint={`每位 ${twd(COACH_SEAT_PRICE)}/月`} value={seats} max={MAX_COACH_SEATS} unit="位" onChange={setSeats} />
         )}
         <div className="rounded-lg bg-canvas px-4 py-3 text-sm">
           <div className="flex items-baseline justify-between">
             <span className="text-ink-600">
-              學員上限 {studentLimit(plan, packs)} 位{plan === 'team' ? `・教練 ${coachLimit(plan, seats)} 位` : ''}
+              {plan === 'self' ? '自己記錄訓練、追蹤進步' : `學員上限 ${studentLimit(plan, packs)} 位${plan === 'team' ? `・教練 ${coachLimit(plan, seats)} 位` : ''}`}
             </span>
             <span className="font-semibold text-ink-900">{twd(monthly)} / 月</span>
           </div>
@@ -312,6 +303,17 @@ function PlanEditor({ billing: b }: { billing: Billing }) {
             {b.status === 'trialing' && '剩餘的試用天數不會保留。'}
           </p>
         )}
+        <p className="text-xs leading-relaxed text-ink-500">
+          付款即表示你同意
+          <Link to="/terms" target="_blank" className="text-accent-700 hover:underline">
+            服務條款
+          </Link>
+          與
+          <Link to="/terms#refund" target="_blank" className="text-accent-700 hover:underline">
+            退款政策
+          </Link>
+          ，並同意付款後立即開始提供服務（依法不適用七日解除權）。
+        </p>
       </div>
 
       <ConfirmDialog

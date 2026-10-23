@@ -1,17 +1,27 @@
 // Prices and limits. Mirrors backend billing/Plans.java (the server enforces them).
-import type { AppData, Billing, BillingStatus, PlanId } from '../types'
+import type { AppData, Billing, BillingStatus, PlanId, Role } from '../types'
 
 export const TRIAL_DAYS = 10
 
 export const PLANS: Record<PlanId, { name: string; price: number; students: number; coaches: number }> = {
   pro: { name: '自由教練 Pro', price: 399, students: 30, coaches: 1 },
   team: { name: '工作室 Team', price: 999, students: 100, coaches: 3 },
+  self: { name: '自主訓練', price: 99, students: 1, coaches: 0 },
 }
 
 export const STUDENT_PACK = { size: 10, price: 99 }
 export const COACH_SEAT_PRICE = 199
 export const MAX_STUDENT_PACKS = 100
 export const MAX_COACH_SEATS = 50
+
+/** How billing works, shown on the pricing page, the billing page and in the terms. */
+export const BILLING_RULES = [
+  '活躍學員才佔名額：已結案、停用的學員不計費，歷史資料仍保留。',
+  '教練名額按帳號計算：邀請一位教練就佔一個名額；停用或移除後釋出。',
+  '超過名額不會刪除資料，只會暫停新增學員或教練。',
+  '加購立即生效，本期按剩餘天數比例收費；減少名額於下個計費週期生效。',
+  '同一位學員在同一工作室只算一次，不會因為兩位教練共同管理而重複計費。',
+]
 
 export const STATUS_LABEL: Record<BillingStatus, string> = {
   trialing: '免費試用中',
@@ -21,11 +31,14 @@ export const STATUS_LABEL: Record<BillingStatus, string> = {
   expired: '已到期・唯讀',
 }
 
-/** Extra coach seats exist only on Team. */
+/** Extra student packs exist on Pro and Team, extra coach seats only on Team; 自主訓練 has no add-ons. */
 export const monthlyPrice = (plan: PlanId, packs: number, seats: number) =>
-  PLANS[plan].price + packs * STUDENT_PACK.price + (plan === 'team' ? seats * COACH_SEAT_PRICE : 0)
+  plan === 'self' ? PLANS.self.price : PLANS[plan].price + packs * STUDENT_PACK.price + (plan === 'team' ? seats * COACH_SEAT_PRICE : 0)
 
-export const studentLimit = (plan: PlanId, packs: number) => PLANS[plan].students + packs * STUDENT_PACK.size
+export const studentLimit = (plan: PlanId, packs: number) => PLANS[plan].students + (plan === 'self' ? 0 : packs * STUDENT_PACK.size)
+
+/** The signed-in user's billing page (coaches and self-trackers live in different areas of the app). */
+export const billingPath = (role?: Role | null) => (role === 'self' ? '/student/billing' : '/coach/billing')
 export const coachLimit = (plan: PlanId, seats: number) => PLANS[plan].coaches + (plan === 'team' ? seats : 0)
 
 /** Estimated prorated charge for an upgrade: the monthly difference times what is left of the period. */

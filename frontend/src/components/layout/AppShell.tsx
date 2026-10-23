@@ -54,6 +54,8 @@ const STUDENT_NAV: NavItem[] = [
   { to: '/student/progress', label: '進步追蹤', short: '進步', icon: TrendingUp },
 ]
 
+const SELF_BILLING_ITEM: NavItem = { to: '/student/billing', label: '方案與付款', icon: CreditCard, desktopOnly: true }
+
 const SELF_NAV: NavItem[] = [
   { to: '/student', label: '首頁', icon: House, end: true },
   { to: '/student/workouts/new', label: '記錄訓練', short: '訓練', icon: Dumbbell, primary: true },
@@ -112,7 +114,8 @@ export function AppShell() {
   const { data } = useData()
   const showStudio = session?.role === 'owner' || (session?.role === 'coach' && !selectIsStudio(data))
   const coachNav = [...COACH_NAV, ...(showStudio ? [STUDIO_ITEM] : []), ...(data.billing ? [BILLING_ITEM] : [])]
-  const nav = session?.role === 'self' ? SELF_NAV : session?.role === 'student' ? STUDENT_NAV : coachNav
+  const selfNav = [...SELF_NAV, ...(data.billing ? [SELF_BILLING_ITEM] : [])]
+  const nav = session?.role === 'self' ? selfNav : session?.role === 'student' ? STUDENT_NAV : coachNav
   const tabBar = nav.filter((item) => !item.desktopOnly)
 
   return (

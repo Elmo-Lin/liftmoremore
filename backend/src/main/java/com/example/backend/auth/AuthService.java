@@ -113,7 +113,8 @@ public class AuthService {
 
     /**
      * A self-tracker gets a one-person space: a coach document they own (the tenant root every
-     * query is scoped by) holding a single student — themselves — with the same ID. Free, no trial.
+     * query is scoped by) holding a single student — themselves — with the same ID. Starts the
+     * 自主訓練 plan's free trial.
      */
     private UserAccount createSelf(String name, String rawEmail, String passwordHash, String googleSub) {
         String email = rawEmail.trim();
@@ -134,6 +135,7 @@ public class AuthService {
         space.email = email;
         space.title = "";
         space.studio = "";
+        space.subscription = Plans.trial(now);
         space.createdAt = now;
         Student s = new Student();
         s.id = u.id;
