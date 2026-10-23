@@ -89,6 +89,8 @@ public class SecurityConfig {
         config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", config);
-        return source;
+        // NewebPay's payment page posts the shopper back here (Origin: newebpay.com); those callbacks are
+        // authenticated by decrypting with our shop key, so they skip the CORS origin check.
+        return request -> request.getRequestURI().startsWith("/api/billing/newebpay/") ? null : source.getCorsConfiguration(request);
     }
 }

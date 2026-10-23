@@ -87,8 +87,9 @@ class BillingFlowTests {
         return new Resp(res.getResponse().getStatus(), parsed, res.getResponse().getHeader("Location"));
     }
 
+    /** Posted by the browser leaving NewebPay's page (or by NewebPay's server), so it carries NewebPay's origin. */
     Resp form(String path, Map<String, String> fields) throws Exception {
-        var req = post(path).contentType(MediaType.APPLICATION_FORM_URLENCODED);
+        var req = post(path).contentType(MediaType.APPLICATION_FORM_URLENCODED).header("Origin", "https://ccore.newebpay.com");
         fields.forEach(req::param);
         return call(req, null, null);
     }
