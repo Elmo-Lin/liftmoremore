@@ -212,7 +212,7 @@ function ApiAuthPanel() {
 
       {tab === 'demo' ? (
         <div className="mt-5 space-y-3">
-          <RoleButton icon={ClipboardList} title="以示範教練進入" text="Jason Lin・12 位示範學員" onClick={() => enterDemo('coach')} />
+          <RoleButton icon={ClipboardList} title="以示範教練進入" text="Stone・12 位示範學員" onClick={() => enterDemo('coach')} />
           <RoleButton icon={UserRound} title="以示範學員進入" text="Emily Chen・查看課表與進步" onClick={() => enterDemo('student')} />
           <p className="text-xs leading-relaxed text-ink-500">不需要帳號。示範資料只存在這個瀏覽器，可以隨意操作，不會影響任何人。</p>
         </div>

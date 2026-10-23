@@ -1,22 +1,41 @@
-import { CalendarPlus, ChevronLeft, ChevronRight, Play, Plus } from 'lucide-react'
+import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Play, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { AppointmentModal } from '../../components/schedule/AppointmentModal'
+import { useRescheduleDrag, type DragState } from '../../components/schedule/useRescheduleDrag'
 import { Button, ButtonLink, IconButton } from '../../components/ui/Button'
 import { Avatar, Badge, Card, DemoNotice, PageHeader } from '../../components/ui/Primitives'
-import { addDays, formatDate, formatTime, isSameDay, startOfWeek } from '../../lib/format'
-import { endOf, STATUS_LABEL } from '../../lib/schedule'
-import { useData } from '../../store/contexts'
+import { addDays, formatDate, formatTime, isSameDay, startOfWeek, toDateInput } from '../../lib/format'
+import { endOf, findConflicts, STATUS_LABEL } from '../../lib/schedule'
+import { useData, useToast } from '../../store/contexts'
 import { selectStudent } from '../../store/selectors'
 import type { Appointment } from '../../types'
 
 const WEEKDAY = ['週一', '週二', '週三', '週四', '週五', '週六', '週日']
 
-/** Coach's class timetable: one week at a time, a day per row, tap a class to edit it. */
+/** Coach's class timetable: one week at a time, a day per row. Tap a class to edit it, drag it to move it. */
 export function CoachSchedulePage() {
-  const { data } = useData()
+  const { data, actions } = useData()
+  const notify = useToast()
   const [weekOffset, setWeekOffset] = useState(0)
   const [editing, setEditing] = useState<Appointment | null>(null)
   const [creating, setCreating] = useState<{ date?: Date } | null>(null)
+
+  // Moving keeps the time of day and only changes the date.
+  const { drag, start, consumeClick } = useRescheduleDrag({
+    onFlipWeek: (dir) => setWeekOffset((w) => w + dir),
+    onDrop: (a, day) => {
+      const from = new Date(a.startAt)
+      if (toDateInput(from) === day) return
+      const [y, m, d] = day.split('-').map(Number)
+      const to = new Date(y, m - 1, d, from.getHours(), from.getMinutes())
+      const moved = { ...a, startAt: to.toISOString() }
+      const res = actions.saveAppointments([moved])
+      if (!res.ok) return notify(res.error, 'error')
+      const name = data.students.find((s) => s.id === a.studentId)?.name ?? ''
+      const overlap = findConflicts(data.appointments, moved).length > 0
+      notify(`${name} 已移到 ${formatDate(to, { weekday: true })} ${formatTime(to)}${overlap ? '・與其他課程時間重疊' : ''}`, overlap ? 'info' : 'success')
+    },
+  })
 
   const today = new Date()
   const weekStart = addDays(startOfWeek(today), weekOffset * 7)
@@ -58,6 +77,7 @@ export function CoachSchedulePage() {
       </div>
       <p className="mb-4 text-[13px] text-ink-500">
         {weekOffset === 0 ? '本週' : weekOffset === 1 ? '下週' : weekOffset === -1 ? '上週' : '這週'} {scheduled} 堂課{cancelled ? `・已取消 ${cancelled} 堂` : ''}
+        <span className="text-ink-400">・長按或拖曳課程可改日期</span>
       </p>
 
       <Card className="divide-y divide-line">
@@ -65,7 +85,12 @@ export function CoachSchedulePage() {
           const list = inWeek.filter((a) => isSameDay(a.startAt, day))
           const isToday = isSameDay(day, today)
           return (
-            <section key={day.toISOString()} className="flex gap-2 px-3 py-3 sm:gap-5 sm:px-5" aria-label={`${WEEKDAY[i]} ${formatDate(day)}`}>
+            <section
+              key={day.toISOString()}
+              data-drop={toDateInput(day)}
+              className={`flex gap-2 px-3 py-3 transition-colors sm:gap-5 sm:px-5 ${drag?.over === toDateInput(day) ? 'bg-accent-50' : ''}`}
+              aria-label={`${WEEKDAY[i]} ${formatDate(day)}`}
+            >
               <div className="w-10 shrink-0 pt-1 text-center sm:w-12">
                 <p className={`text-xs ${isToday ? 'font-semibold text-accent-700' : 'text-ink-500'}`}>{isToday ? '今天' : WEEKDAY[i]}</p>
                 <p className={`tabular mt-0.5 text-[17px] font-semibold ${isToday ? 'text-accent-700' : 'text-ink-900'}`}>{day.getDate()}</p>
@@ -74,7 +99,14 @@ export function CoachSchedulePage() {
                 {list.length ? (
                   <ul className="space-y-1.5">
                     {list.map((a) => (
-                      <AppointmentRow key={a.id} appointment={a} onOpen={() => setEditing(a)} showStart={isToday} />
+                      <AppointmentRow
+                        key={a.id}
+                        appointment={a}
+                        showStart={isToday}
+                        dragging={drag?.appointment.id === a.id}
+                        onPointerDown={(e) => start(e, a)}
+                        onOpen={() => !consumeClick() && setEditing(a)}
+                      />
                     ))}
                   </ul>
                 ) : (
@@ -94,6 +126,7 @@ export function CoachSchedulePage() {
         })}
       </Card>
       <DemoNotice className="mt-6" />
+      {drag && <DragOverlay drag={drag} />}
 
       <AppointmentModal open={!!creating} onClose={() => setCreating(null)} defaults={creating ?? undefined} />
       <AppointmentModal open={!!editing} onClose={() => setEditing(null)} appointment={editing ?? undefined} />
@@ -101,7 +134,48 @@ export function CoachSchedulePage() {
   )
 }
 
-function AppointmentRow({ appointment: a, onOpen, showStart }: { appointment: Appointment; onOpen: () => void; showStart: boolean }) {
+/** While dragging: the class following the pointer, plus "previous / next week" zones at the screen edges. */
+function DragOverlay({ drag }: { drag: DragState }) {
+  const { data } = useData()
+  const a = drag.appointment
+  const zone = (dir: 'prev' | 'next') =>
+    `fixed inset-x-0 z-50 flex h-14 items-center justify-center gap-1.5 text-sm font-medium transition-colors md:left-60 ${
+      drag.over === dir ? 'bg-accent-600 text-white' : 'bg-accent-50/95 text-accent-700 backdrop-blur'
+    }`
+  return (
+    <>
+      <div data-drop="prev" className={`${zone('prev')} top-12 border-b border-accent-100 md:top-0`}>
+        <ChevronUp className="size-4" />
+        停在這裡切換到上一週
+      </div>
+      <div data-drop="next" className={`${zone('next')} bottom-[calc(50px+env(safe-area-inset-bottom))] border-t border-accent-100 md:bottom-0`}>
+        <ChevronDown className="size-4" />
+        停在這裡切換到下一週
+      </div>
+      <div
+        className="pointer-events-none fixed z-[60] -translate-x-1/2 -translate-y-[120%] rounded-lg bg-surface px-3 py-2 text-sm shadow-[0_8px_24px_rgba(0,0,0,0.18)] ring-1 ring-accent-600"
+        style={{ left: drag.x, top: drag.y }}
+      >
+        <span className="tabular font-semibold text-ink-900">{formatTime(a.startAt)}</span>
+        <span className="ml-2 text-ink-700">{selectStudent(data, a.studentId)?.name}</span>
+      </div>
+    </>
+  )
+}
+
+function AppointmentRow({
+  appointment: a,
+  onOpen,
+  onPointerDown,
+  showStart,
+  dragging,
+}: {
+  appointment: Appointment
+  onOpen: () => void
+  onPointerDown: (e: React.PointerEvent) => void
+  showStart: boolean
+  dragging: boolean
+}) {
   const { data } = useData()
   const s = selectStudent(data, a.studentId)
   const cancelled = a.status === 'cancelled'
@@ -110,7 +184,11 @@ function AppointmentRow({ appointment: a, onOpen, showStart }: { appointment: Ap
       <button
         type="button"
         onClick={onOpen}
-        className={`flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-subtle ${cancelled ? 'opacity-60' : 'bg-canvas'}`}
+        onPointerDown={onPointerDown}
+        onContextMenu={(e) => e.preventDefault()}
+        className={`flex min-w-0 flex-1 cursor-grab items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors select-none [-webkit-touch-callout:none] hover:bg-subtle ${
+          cancelled ? 'opacity-60' : 'bg-canvas'
+        } ${dragging ? 'opacity-30' : ''}`}
       >
         <span className="tabular w-11 shrink-0 text-[13px] leading-tight text-ink-800">
           <span className={`block font-semibold ${cancelled ? 'line-through' : ''}`}>{formatTime(a.startAt)}</span>

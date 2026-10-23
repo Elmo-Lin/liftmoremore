@@ -75,96 +75,75 @@ function plan(
 
 function buildPlans(now: number): TrainingPlan[] {
   return [
-    plan('plan_fullbody', '新手全身訓練', '每週 2–3 次，熟悉基本動作模式，建立穩定的訓練習慣。', 'general', 8, [
-      day('pfb_a', '全身 A', '蹲 / 推 / 拉', [
-        ['ex_goblet', 3, '10', '下蹲時膝蓋與腳尖同方向'],
-        ['ex_dbpress', 3, '10'],
-        ['ex_latpd', 3, '10'],
-        ['ex_rdl', 3, '10', '保持背部中立，感受腿後側伸展'],
-        ['ex_facepull', 2, '15'],
+    plan('plan_strength8', '力量週8週訓練', '以深蹲、臥推、硬舉、肩推為核心，每週 3 練、8 週線性加重：完成目標組數就小幅增加重量。', 'strength', 8, [
+      day('ps8_a', '力量 A', '深蹲 / 臥推', [
+        ['ex_squat', 5, '5', '目標 RPE 8，完成即下次加 2.5 kg'],
+        ['ex_bench', 5, '5'],
+        ['ex_cablerow', 3, '8'],
       ]),
-      day('pfb_b', '全身 B', '髖主導 / 肩 / 划船', [
-        ['ex_legpress', 3, '12'],
-        ['ex_seatedrow', 3, '10'],
-        ['ex_ohp', 3, '8'],
-        ['ex_hipthrust', 3, '10', '頂端停 1 秒'],
-        ['ex_pushdown', 2, '12'],
+      day('ps8_b', '力量 B', '硬舉 / 肩推', [
+        ['ex_deadlift', 3, '3', '技術優先，每週加 2.5–5 kg'],
+        ['ex_ohp', 5, '5'],
+        ['ex_latpd', 3, '8'],
       ]),
-    ], 120, now),
-    plan('plan_upperlower', '上下半身分化 4 日', '以增肌為主的上下肢分化，每週 4 練，中等次數區間累積訓練量。', 'hypertrophy', 10, [
-      day('pul_ua', '上肢 A', '胸 / 背 水平推拉', [
+      day('ps8_c', '力量 C', '深蹲 / 臥推（次重）', [
+        ['ex_squat', 4, '4', '約 A 日重量的 90%'],
+        ['ex_bench', 4, '4'],
+        ['ex_rdl', 3, '6'],
+      ]),
+    ], 200, now),
+    plan('plan_hyper8', '小肌肥大8週訓練', '上下肢分化每週 4 練，8–15 下累積訓練量，額外加強肩、手臂等小肌群。', 'hypertrophy', 8, [
+      day('ph8_ua', '上肢 A', '胸 / 背 / 側肩', [
         ['ex_bench', 4, '6-8'],
         ['ex_cablerow', 4, '8-10'],
-        ['ex_ohp', 3, '8'],
-        ['ex_latpd', 3, '10'],
-        ['ex_curl', 3, '12'],
+        ['ex_lateral', 4, '12-15', '慢放 2 秒'],
+        ['ex_curl', 3, '10-12'],
+        ['ex_pushdown', 3, '12'],
       ]),
-      day('pul_la', '下肢 A', '蹲為主', [
+      day('ph8_la', '下肢 A', '蹲為主', [
         ['ex_squat', 4, '6-8', '最後一組保留 1–2 下'],
         ['ex_rdl', 3, '8'],
         ['ex_legpress', 3, '10'],
         ['ex_legcurl', 3, '12'],
       ]),
-      day('pul_ub', '上肢 B', '肩 / 上斜 / 手臂', [
+      day('ph8_ub', '上肢 B', '肩 / 上斜 / 手臂', [
         ['ex_incline', 4, '8-10'],
         ['ex_dbrow', 3, '10'],
-        ['ex_lateral', 3, '15'],
-        ['ex_seatedrow', 3, '10'],
+        ['ex_lateral', 4, '15'],
+        ['ex_facepull', 3, '15'],
+        ['ex_curl', 3, '12'],
         ['ex_pushdown', 3, '12'],
       ]),
-      day('pul_lb', '下肢 B', '髖主導', [
+      day('ph8_lb', '下肢 B', '髖主導', [
         ['ex_deadlift', 3, '5'],
         ['ex_bss', 3, '8', '每腳 8 下'],
-        ['ex_hipthrust', 3, '10'],
+        ['ex_hipthrust', 3, '10', '頂端停 1 秒'],
         ['ex_legcurl', 3, '12'],
       ]),
     ], 150, now),
-    plan('plan_strength', '肌力基礎 5×5', '以複合動作為核心的線性進步計畫，每次成功完成即小幅加重。', 'strength', 12, [
-      day('pst_a', '訓練 A', '深蹲 / 臥推', [
-        ['ex_squat', 5, '5'],
-        ['ex_bench', 5, '5'],
-        ['ex_cablerow', 3, '8'],
-      ]),
-      day('pst_b', '訓練 B', '深蹲 / 肩推 / 硬舉', [
-        ['ex_squat', 5, '5'],
-        ['ex_ohp', 5, '5'],
-        ['ex_deadlift', 1, '5', '單組最大努力，技術優先'],
-        ['ex_latpd', 3, '8'],
-      ]),
-    ], 200, now),
-    plan('plan_fatloss', '減脂體能循環', '較短休息、中高次數，搭配日常活動量提升熱量消耗。', 'fatLoss', 8, [
-      day('pfl_a', '循環 A', '全身', [
-        ['ex_goblet', 3, '12'],
+    plan('plan_circuit16', '循環16週訓練', '全身循環每週 3 練：動作間休息 30 秒、一輪後休息 2 分鐘，16 週逐步增加輪數與重量。', 'fatLoss', 16, [
+      day('pc16_a', '循環 A', '全身', [
+        ['ex_goblet', 3, '12', '下蹲時膝蓋與腳尖同方向'],
         ['ex_dbpress', 3, '12'],
         ['ex_seatedrow', 3, '12'],
         ['ex_hipthrust', 3, '12'],
         ['ex_lateral', 2, '15'],
       ]),
-      day('pfl_b', '循環 B', '全身', [
+      day('pc16_b', '循環 B', '全身', [
         ['ex_legpress', 3, '15'],
         ['ex_latpd', 3, '12'],
-        ['ex_rdl', 3, '10'],
+        ['ex_rdl', 3, '10', '保持背部中立，感受腿後側伸展'],
         ['ex_dbrow', 3, '12'],
         ['ex_facepull', 2, '15'],
       ]),
-    ], 90, now),
-    plan('plan_powerlifting', '健力備賽・第一期', '累積期：三大項中等強度、較多組數，為下一期強度期打底。', 'powerlifting', 6, [
-      day('ppl_sq', '深蹲日', '深蹲 + 輔助', [
-        ['ex_squat', 5, '3', '目標 RPE 7–8'],
-        ['ex_bench', 4, '5'],
-        ['ex_legpress', 3, '8'],
+      day('pc16_c', '循環 C', '全身', [
+        ['ex_bss', 3, '10', '每腳 10 下'],
+        ['ex_incline', 3, '12'],
+        ['ex_cablerow', 3, '12'],
+        ['ex_legcurl', 3, '12'],
+        ['ex_pushdown', 2, '15'],
       ]),
-      day('ppl_dl', '硬舉日', '硬舉 + 上背', [
-        ['ex_deadlift', 4, '3', '目標 RPE 7–8'],
-        ['ex_ohp', 4, '5'],
-        ['ex_latpd', 4, '8'],
-      ]),
-      day('ppl_bp', '臥推日', '臥推 + 後側鏈', [
-        ['ex_bench', 5, '3', '比賽暫停節奏'],
-        ['ex_rdl', 3, '6'],
-        ['ex_cablerow', 4, '8'],
-      ]),
-    ], 60, now),
+    ], 120, now),
   ]
 }
 
@@ -197,7 +176,7 @@ const PROFILES: Profile[] = [
     student: {
       id: 'stu_01', name: 'Emily Chen', email: 'emily.chen@example.com', phone: '0912-345-678', gender: 'female',
       birthYear: 1994, heightCm: 162, goal: 'hypertrophy', goalDetail: '增加上半身線條，半年內臥推做到 40 kg',
-      status: 'active', weeklyFrequency: 3, activePlanId: 'plan_upperlower',
+      status: 'active', weeklyFrequency: 3, activePlanId: 'plan_hyper8',
       coachNotes: '動作學習快，臥推離心控制已明顯進步。工作日晚上時間較穩定，週末偶爾出差。',
     },
     joinedWeeksAgo: 30, coachedDays: [2, 4], independentDays: [6], hour: 19, strength: 0.55, weeklyRate: 0.018,
@@ -208,7 +187,7 @@ const PROFILES: Profile[] = [
     student: {
       id: 'stu_02', name: 'Kevin Wang', email: 'kevin.wang@example.com', phone: '0928-112-334', gender: 'male',
       birthYear: 1988, heightCm: 175, goal: 'strength', goalDetail: '深蹲突破 140 kg，提升整體肌力',
-      status: 'active', weeklyFrequency: 3, activePlanId: 'plan_strength',
+      status: 'active', weeklyFrequency: 3, activePlanId: 'plan_strength8',
       coachNotes: '工程師，久坐。深蹲底部髖關節活動度需持續熱身。偏好早上 7 點上課。',
     },
     joinedWeeksAgo: 40, coachedDays: [1, 3], independentDays: [5], hour: 7, strength: 1.15, weeklyRate: 0.012,
@@ -218,7 +197,7 @@ const PROFILES: Profile[] = [
     student: {
       id: 'stu_03', name: 'Grace Lee', email: 'grace.lee@example.com', phone: '0935-776-210', gender: 'female',
       birthYear: 1997, heightCm: 158, goal: 'fatLoss', goalDetail: '三個月內體重下降 4 kg，維持每週 3 次訓練',
-      status: 'active', weeklyFrequency: 3, activePlanId: 'plan_fatloss',
+      status: 'active', weeklyFrequency: 3, activePlanId: 'plan_circuit16',
       coachNotes: '有在記錄飲食。動作穩定度佳，可逐步縮短組間休息。',
     },
     joinedWeeksAgo: 16, coachedDays: [1, 4], independentDays: [0], hour: 12, strength: 0.5, weeklyRate: 0.015,
@@ -228,7 +207,7 @@ const PROFILES: Profile[] = [
     student: {
       id: 'stu_04', name: 'Eric Chang', email: 'eric.chang@example.com', phone: '0910-558-902', gender: 'male',
       birthYear: 1992, heightCm: 178, goal: 'powerlifting', goalDetail: '明年春季健力賽，三項總和目標 500 kg',
-      status: 'active', weeklyFrequency: 4, activePlanId: 'plan_powerlifting',
+      status: 'active', weeklyFrequency: 4, activePlanId: 'plan_strength8',
       coachNotes: '比賽經驗 1 次。硬舉起槓時背部角度需注意，臥推暫停節奏要再練。',
     },
     joinedWeeksAgo: 52, coachedDays: [2, 5], independentDays: [0, 3], hour: 20, strength: 1.5, weeklyRate: 0.009,
@@ -238,7 +217,7 @@ const PROFILES: Profile[] = [
     student: {
       id: 'stu_05', name: 'Tiffany Liu', email: 'tiffany.liu@example.com', phone: '0921-300-457', gender: 'female',
       birthYear: 1985, heightCm: 165, goal: 'general', goalDetail: '建立運動習慣，日常搬重物更輕鬆',
-      status: 'active', weeklyFrequency: 2, activePlanId: 'plan_fullbody',
+      status: 'active', weeklyFrequency: 2, activePlanId: 'plan_circuit16',
       coachNotes: '兩個孩子的媽媽，時間以平日上午為主。喜歡有明確進度的訓練計畫。',
     },
     joinedWeeksAgo: 20, coachedDays: [3], independentDays: [6], hour: 10, strength: 0.45, weeklyRate: 0.02,
@@ -248,7 +227,7 @@ const PROFILES: Profile[] = [
     student: {
       id: 'stu_06', name: 'Ryan Huang', email: 'ryan.huang@example.com', phone: '0987-221-064', gender: 'male',
       birthYear: 1999, heightCm: 172, goal: 'hypertrophy', goalDetail: '增重 5 kg，以肌肉量為主',
-      status: 'active', weeklyFrequency: 4, activePlanId: 'plan_upperlower',
+      status: 'active', weeklyFrequency: 4, activePlanId: 'plan_hyper8',
       coachNotes: '大學研究生，自主訓練頻率高，記錄習慣好。飲食蛋白質攝取需再提醒。',
     },
     joinedWeeksAgo: 24, coachedDays: [1, 4], independentDays: [3, 6], hour: 18, strength: 0.95, weeklyRate: 0.014,
@@ -259,7 +238,7 @@ const PROFILES: Profile[] = [
     student: {
       id: 'stu_07', name: 'Cindy Wu', email: 'cindy.wu@example.com', phone: '0916-884-120', gender: 'female',
       birthYear: 1990, heightCm: 160, goal: 'mobility', goalDetail: '改善圓肩姿勢，提升核心穩定',
-      status: 'active', weeklyFrequency: 1, activePlanId: 'plan_fullbody',
+      status: 'active', weeklyFrequency: 1, activePlanId: 'plan_circuit16',
       coachNotes: '辦公室工作，每次課前做 10 分鐘胸椎活動。目前以每週一堂為主。',
     },
     joinedWeeksAgo: 14, coachedDays: [5], independentDays: [], hour: 12, strength: 0.42, weeklyRate: 0.015,
@@ -269,7 +248,7 @@ const PROFILES: Profile[] = [
     student: {
       id: 'stu_08', name: 'Jerry Tsai', email: 'jerry.tsai@example.com', phone: '0933-650-781', gender: 'male',
       birthYear: 1979, heightCm: 170, goal: 'general', goalDetail: '維持肌力，配合週末登山',
-      status: 'active', weeklyFrequency: 2, activePlanId: 'plan_fullbody',
+      status: 'active', weeklyFrequency: 2, activePlanId: 'plan_circuit16',
       coachNotes: '週末常登山，週一安排較輕的課程。',
     },
     joinedWeeksAgo: 35, coachedDays: [2], independentDays: [4], hour: 7, strength: 0.8, weeklyRate: 0.008,
@@ -279,7 +258,7 @@ const PROFILES: Profile[] = [
     student: {
       id: 'stu_09', name: 'Leo Cheng', email: 'leo.cheng@example.com', phone: '0955-410-236', gender: 'male',
       birthYear: 1995, heightCm: 180, goal: 'strength', goalDetail: '提升三大項肌力',
-      status: 'inactive', weeklyFrequency: 2, activePlanId: 'plan_strength',
+      status: 'inactive', weeklyFrequency: 2, activePlanId: 'plan_strength8',
       coachNotes: '方案用完後暫停，表示工作穩定後會回來。',
     },
     joinedWeeksAgo: 28, stoppedWeeksAgo: 5, coachedDays: [2, 5], independentDays: [], hour: 20, strength: 1.0, weeklyRate: 0.012,
@@ -289,7 +268,7 @@ const PROFILES: Profile[] = [
     student: {
       id: 'stu_10', name: 'Vivian Hsu', email: 'vivian.hsu@example.com', phone: '0975-302-118', gender: 'female',
       birthYear: 2001, heightCm: 166, goal: 'hypertrophy', goalDetail: '臀腿線條',
-      status: 'inactive', weeklyFrequency: 2, activePlanId: 'plan_fullbody',
+      status: 'inactive', weeklyFrequency: 2, activePlanId: 'plan_hyper8',
       coachNotes: '出國交換一學期，明年 2 月回台後繼續，剩餘堂數保留。',
     },
     joinedWeeksAgo: 22, stoppedWeeksAgo: 3, coachedDays: [1, 4], independentDays: [], hour: 17, strength: 0.55, weeklyRate: 0.016,
@@ -299,7 +278,7 @@ const PROFILES: Profile[] = [
     student: {
       id: 'stu_11', name: 'Allen Lin', email: 'allen.lin@example.com', phone: '0918-907-643', gender: 'male',
       birthYear: 1993, heightCm: 173, goal: 'fatLoss', goalDetail: '體重下降並提升體能，能連續爬樓梯不喘',
-      status: 'active', weeklyFrequency: 2, activePlanId: 'plan_fatloss',
+      status: 'active', weeklyFrequency: 2, activePlanId: 'plan_circuit16',
       coachNotes: '新學員，先以動作學習為主，重量保守。',
     },
     joinedWeeksAgo: 3, coachedDays: [2, 5], independentDays: [], hour: 18, strength: 0.65, weeklyRate: 0.03,
@@ -309,7 +288,7 @@ const PROFILES: Profile[] = [
     student: {
       id: 'stu_12', name: 'Elmo Lin', email: 'elmo.lin@example.com', phone: '0930-118-526', gender: 'male',
       birthYear: 1996, heightCm: 178, goal: 'powerlifting', goalDetail: '三大項穩定進步，硬舉突破 180 kg',
-      status: 'active', weeklyFrequency: 4, activePlanId: 'plan_powerlifting',
+      status: 'active', weeklyFrequency: 4, activePlanId: 'plan_strength8',
       coachNotes: '自主訓練很規律，會自己記錄。硬舉起始姿勢偶爾圓背，熱身時加強髖鉸鏈練習。',
     },
     joinedWeeksAgo: 26, coachedDays: [1, 4], independentDays: [3, 6], hour: 20, strength: 1.0, weeklyRate: 0.015,
@@ -353,11 +332,11 @@ export function generateMockData(nowDate = new Date()): AppData {
   const coach: Coach = {
     id: COACH_ID,
     role: 'coach',
-    name: 'Jason Lin',
-    email: 'jason.lin@example.com',
+    name: 'Stone',
+    email: 'stone@example.com',
     phone: '0900-000-123',
     title: '肌力與體能教練',
-    studio: 'Jason 肌力工作室（台北大安）',
+    studio: 'Action Gym（台北大安）',
     createdAt: new Date(now - 400 * DAY).toISOString(),
   }
 
@@ -392,7 +371,7 @@ export function generateMockData(nowDate = new Date()): AppData {
 
     const startMs = Math.max(windowStart.getTime(), joinedAt.getTime())
     const endMs = p.stoppedWeeksAgo ? today.getTime() - p.stoppedWeeksAgo * 7 * DAY : today.getTime() - 1
-    const planDays = planById.get(student.activePlanId ?? 'plan_fullbody')!.days
+    const planDays = planById.get(student.activePlanId ?? 'plan_circuit16')!.days
     let dayIdx = 0
     const studentWorkouts: WorkoutSession[] = []
 
@@ -555,7 +534,7 @@ export function generateMockData(nowDate = new Date()): AppData {
           studentId: student.id,
           startAt: date.toISOString(),
           durationMin: 60,
-          location: 'Jason 肌力工作室',
+          location: 'Action Gym',
           status: 'scheduled',
         })
       }
@@ -578,14 +557,14 @@ export function generateMockData(nowDate = new Date()): AppData {
       studentId,
       startAt: at.toISOString(),
       durationMin: 60,
-      location: 'Jason 肌力工作室',
+      location: 'Action Gym',
       status: 'scheduled',
     })
   }
   appointments.sort((a, b) => a.startAt.localeCompare(b.startAt))
 
   // One unfinished draft to demonstrate interrupted-session recovery.
-  const draftDay = planById.get('plan_fatloss')!.days[0]
+  const draftDay = planById.get('plan_circuit16')!.days[0]
   const draftStart = new Date(now - 95 * 60000).toISOString()
   workouts.push({
     id: id('wo'),
@@ -595,7 +574,7 @@ export function generateMockData(nowDate = new Date()): AppData {
     createdBy: 'coach',
     status: 'draft',
     title: draftDay.name,
-    planId: 'plan_fatloss',
+    planId: 'plan_circuit16',
     trainingDayId: draftDay.id,
     startedAt: draftStart,
     updatedAt: draftStart,
