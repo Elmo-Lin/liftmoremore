@@ -24,6 +24,7 @@ import org.springframework.stereotype.Component;
  * emails/{emailLower}       {userId} — enforces unique email
  * invites/{code}            one-time student invite
  * exercises/{id}            shared catalog
+ * passwordResets/{sha256}   one-time password reset link (only the token's hash is stored)
  * billingOrders/{orderNo}   one NewebPay checkout (found by order number in payment callbacks)
  * coaches/{coachId}         workspace (with its subscription), with subcollections:
  *   students | plans | workouts | packages | transactions | metrics | appointments | ledgers | payments
@@ -39,6 +40,7 @@ public class Db {
     public static final String EXERCISES = "exercises";
     public static final String COACHES = "coaches";
     public static final String BILLING_ORDERS = "billingOrders";
+    public static final String PASSWORD_RESETS = "passwordResets";
 
     public static final String STUDENTS = "students";
     public static final String PLANS = "plans";

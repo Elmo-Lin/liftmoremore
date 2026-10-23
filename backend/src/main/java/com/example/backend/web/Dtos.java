@@ -327,6 +327,12 @@ public final class Dtos {
             @NotBlank(message = "請輸入 Email") @Email(message = "Email 格式不正確") String email,
             @NotBlank @Size(min = 8, max = 72, message = "密碼需為 8–72 字元") String password) {}
 
+    public record ForgotPasswordInput(@NotBlank(message = "請輸入 Email") @Email(message = "Email 格式不正確") String email) {}
+
+    public record ResetPasswordInput(
+            @NotBlank(message = "重設連結不完整，請重新申請") String token,
+            @NotBlank @Size(min = 8, max = 72, message = "密碼需為 8–72 字元") String password) {}
+
     public record ActivateInput(
             @NotBlank(message = "請輸入邀請碼") String inviteCode,
             @NotBlank @Size(min = 8, max = 72, message = "密碼需為 8–72 字元") String password) {}

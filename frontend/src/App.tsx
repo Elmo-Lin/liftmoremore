@@ -2,7 +2,7 @@ import { lazy, Suspense, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router'
 import { AppShell } from './components/layout/AppShell'
 import { ScrollToTop } from './components/layout/ScrollToTop'
-import { DemoPage, LoginPage } from './pages/Login'
+import { DemoPage, ForgotPasswordPage, LoginPage, ResetPasswordPage } from './pages/Login'
 import { NotFoundPage } from './pages/NotFound'
 import { HomePage } from './pages/public/Home'
 import { useData, useSession } from './store/contexts'
@@ -66,6 +66,8 @@ export default function App() {
         <Route path="/terms" element={<Suspense fallback={null}><TermsPage /></Suspense>} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/demo" element={<DemoPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route
           path="/coach"
           element={

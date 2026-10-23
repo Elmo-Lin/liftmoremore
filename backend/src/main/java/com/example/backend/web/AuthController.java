@@ -2,14 +2,17 @@ package com.example.backend.web;
 
 import com.example.backend.auth.AuthService;
 import com.example.backend.auth.CurrentUser;
+import com.example.backend.auth.PasswordResetService;
 import com.example.backend.web.Dtos.ActivateInput;
 import com.example.backend.web.Dtos.AuthResponse;
+import com.example.backend.web.Dtos.ForgotPasswordInput;
 import com.example.backend.web.Dtos.GoogleAuthInput;
 import com.example.backend.web.Dtos.LoginInput;
 import com.example.backend.web.Dtos.MeDto;
 import com.example.backend.web.Dtos.RegisterCoachInput;
 import com.example.backend.web.Dtos.RegisterSelfInput;
 import com.example.backend.web.Dtos.RegisterStudioInput;
+import com.example.backend.web.Dtos.ResetPasswordInput;
 import jakarta.validation.Valid;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -25,9 +28,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService auth;
+    private final PasswordResetService resets;
 
-    public AuthController(AuthService auth) {
+    public AuthController(AuthService auth, PasswordResetService resets) {
         this.auth = auth;
+        this.resets = resets;
     }
 
     @GetMapping("/health")
@@ -65,6 +70,18 @@ public class AuthController {
     @PostMapping("/auth/activate")
     public AuthResponse activate(@Valid @RequestBody ActivateInput in) {
         return auth.activate(in);
+    }
+
+    /** Always 204, whether or not the email is registered. */
+    @PostMapping("/auth/forgot-password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void forgotPassword(@Valid @RequestBody ForgotPasswordInput in) {
+        resets.request(in.email());
+    }
+
+    @PostMapping("/auth/reset-password")
+    public AuthResponse resetPassword(@Valid @RequestBody ResetPasswordInput in) {
+        return resets.reset(in.token(), in.password());
     }
 
     @PostMapping("/auth/google")

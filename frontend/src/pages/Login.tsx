@@ -1,7 +1,7 @@
 import { ArrowRight, ChartLine, Dumbbell, Ticket, Users } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router'
-import { activateInvite, googleSignIn, login, registerCoach, registerSelf, registerStudio } from '../api/auth'
+import { activateInvite, forgotPassword, googleSignIn, login, registerCoach, registerSelf, registerStudio, resetPassword } from '../api/auth'
 import { API_URL, ApiError, enterLocalDemo, exitLocalDemo, isApiMode } from '../api/client'
 import { GoogleButton } from '../components/auth/GoogleButton'
 import { Logo, MobileTopBar } from '../components/layout/AppShell'
@@ -24,7 +24,9 @@ const FEATURES = [
   { icon: Ticket, title: '堂數清楚', text: '記錄訓練與扣堂分開，異動都留紀錄。' },
 ]
 
-/** Headline, features and a panel on the right (sign-in, or the demo picker). */
+const PANEL_CLASS = 'rounded-2xl bg-surface p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_0_0_0.5px_rgba(0,0,0,0.05)] md:p-8'
+
+/** Headline, features and a panel on the right (sign-in, the demo picker, password reset). */
 function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh bg-canvas">
@@ -209,7 +211,7 @@ function ApiAuthPanel() {
     if (tab === 'invite') void run(() => activateInvite(form.code, form.password))
   }
 
-  const panelClass = 'rounded-2xl bg-surface p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_0_0_0.5px_rgba(0,0,0,0.05)] md:p-8'
+  const panelClass = PANEL_CLASS
   const errorBox = error && (
     <p className="mt-4 rounded-lg bg-danger-50 px-3 py-2 text-sm text-danger-600" role="alert">
       {error}
@@ -328,6 +330,13 @@ function ApiAuthPanel() {
           autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
           hint={tab === 'login' ? undefined : '至少 8 個字元'}
         />
+        {tab === 'login' && (
+          <p className="-mt-1.5 text-right text-[13px]">
+            <Link to="/forgot-password" className="text-accent-700 hover:underline">
+              忘記密碼？
+            </Link>
+          </p>
+        )}
         {settingPassword && (
           <TextInput
             label="再次輸入密碼"
@@ -346,6 +355,128 @@ function ApiAuthPanel() {
       {errorBox}
       <AgreementNote register={tab === 'register'} />
     </section>
+  )
+}
+
+// ----------------------------------------------------------------------------- forgot / reset password
+
+/** /forgot-password: mail a reset link. The answer never says whether the email is registered. */
+export function ForgotPasswordPage() {
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError('請輸入正確的 Email')
+    setBusy(true)
+    setError(null)
+    try {
+      await forgotPassword(email.trim())
+      setSent(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '寄送失敗，請稍後再試')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <AuthLayout>
+      <section className={PANEL_CLASS}>
+        <h2 className="text-lg font-semibold text-ink-900">忘記密碼</h2>
+        {sent ? (
+          <div className="mt-4 space-y-4 text-sm leading-relaxed text-ink-600">
+            <p>
+              如果 <strong className="text-ink-900">{email.trim()}</strong> 有註冊，我們已經寄出重設密碼的連結，請在 1 小時內點開。
+            </p>
+            <p className="text-[13px] text-ink-500">沒收到的話，請看看垃圾郵件匣，或過一分鐘再試一次。用 Google 註冊的帳號，也可以直接用 Google 登入。</p>
+            <Button variant="secondary" className="w-full" onClick={() => setSent(false)}>
+              重新寄送
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={submit} noValidate className="mt-4 space-y-3.5">
+            <p className="text-sm text-ink-600">輸入註冊時的 Email，我們會寄一封重設密碼的信給你。</p>
+            <TextInput label="Email" type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Button type="submit" size="lg" className="w-full" disabled={busy}>
+              {busy ? '寄送中…' : '寄送重設連結'}
+            </Button>
+          </form>
+        )}
+        {error && (
+          <p className="mt-4 rounded-lg bg-danger-50 px-3 py-2 text-sm text-danger-600" role="alert">
+            {error}
+          </p>
+        )}
+        <p className="mt-5 text-center text-[13px]">
+          <Link to="/login" className="text-accent-700 hover:underline">
+            回到登入
+          </Link>
+        </p>
+      </section>
+    </AuthLayout>
+  )
+}
+
+/** /reset-password?token=…: the link from the email. Sets the new password and signs in. */
+export function ResetPasswordPage() {
+  const { signIn } = useSession()
+  const navigate = useNavigate()
+  const notify = useToast()
+  const [params] = useSearchParams()
+  const token = params.get('token') ?? ''
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (password.length < 8) return setError('密碼至少 8 個字元')
+    if (password !== confirm) return setError('兩次輸入的密碼不一致')
+    setBusy(true)
+    setError(null)
+    try {
+      const session = await resetPassword(token, password)
+      signIn(session)
+      navigate(homePath(session.role), { replace: true })
+      notify('密碼已更新，已為你登入')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '重設失敗，請重新申請')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <AuthLayout>
+      <section className={PANEL_CLASS}>
+        <h2 className="text-lg font-semibold text-ink-900">設定新密碼</h2>
+        {token ? (
+          <form onSubmit={submit} noValidate className="mt-4 space-y-3.5">
+            <TextInput label="新密碼" type="password" autoComplete="new-password" hint="至少 8 個字元" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <TextInput label="再次輸入新密碼" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+            <Button type="submit" size="lg" className="w-full" disabled={busy}>
+              {busy ? '處理中…' : '更新密碼並登入'}
+            </Button>
+          </form>
+        ) : (
+          <p className="mt-4 text-sm text-ink-600">這個連結不完整，請從信中的按鈕重新開啟，或重新申請。</p>
+        )}
+        {error && (
+          <p className="mt-4 rounded-lg bg-danger-50 px-3 py-2 text-sm text-danger-600" role="alert">
+            {error}
+          </p>
+        )}
+        <p className="mt-5 text-center text-[13px]">
+          <Link to="/forgot-password" className="text-accent-700 hover:underline">
+            重新申請重設連結
+          </Link>
+        </p>
+      </section>
+    </AuthLayout>
   )
 }
 

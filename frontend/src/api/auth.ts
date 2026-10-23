@@ -37,6 +37,16 @@ export async function googleSignIn(credential: string, signup?: { accountType: '
   return toSession(await api<AuthResponse>('POST', '/auth/google', { credential, ...signup }))
 }
 
+/** Mails a reset link if the email is registered; the answer is the same either way. */
+export async function forgotPassword(email: string) {
+  await api('POST', '/auth/forgot-password', { email })
+}
+
+/** Sets a new password with the token from the mailed link, and signs in. */
+export async function resetPassword(token: string, password: string) {
+  return toSession(await api<AuthResponse>('POST', '/auth/reset-password', { token, password }))
+}
+
 /** A new token for the current role (after a paid upgrade turned a coach into a studio owner). */
 export async function refreshSession(token: string) {
   return toSession(await api<AuthResponse>('POST', '/auth/refresh', undefined, token))
