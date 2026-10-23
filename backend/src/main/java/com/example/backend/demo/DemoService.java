@@ -5,7 +5,6 @@ import com.example.backend.common.ApiException;
 import com.example.backend.common.Domain;
 import com.example.backend.domain.Appointment;
 import com.example.backend.domain.Coach;
-import com.example.backend.domain.Exercise;
 import com.example.backend.domain.ProgressMetric;
 import com.example.backend.domain.SessionPackage;
 import com.example.backend.domain.SessionTransaction;
@@ -20,7 +19,6 @@ import com.example.backend.store.Db;
 import com.example.backend.web.Dtos.AppDataDto;
 import com.example.backend.web.Dtos.AppointmentDto;
 import com.example.backend.web.Dtos.CoachMemberDto;
-import com.example.backend.web.Dtos.ExerciseDto;
 import com.example.backend.web.Dtos.ExerciseLogDto;
 import com.example.backend.web.Dtos.MetricDto;
 import com.example.backend.web.Dtos.PackageDto;
@@ -71,9 +69,7 @@ public class DemoService {
         String coachId = data.coach().id();
         BulkWriter w = db.fs.bulkWriter();
 
-        for (ExerciseDto e : data.exercises()) {
-            w.set(db.doc(Db.EXERCISES, e.id()), db.encode(new Exercise(e.id(), e.name(), e.nameEn(), e.muscleGroup(), e.equipment(), e.increment())));
-        }
+        // Exercises are built in (ExerciseCatalog); the demo data uses only those.
 
         Coach coach = new Coach();
         coach.id = coachId;

@@ -83,7 +83,7 @@ public class BootstrapService {
                 coach,
                 roster.stream().sorted(Comparator.comparing((Student s) -> s.joinedAt)).map(s -> Mapper.student(s, asCoach)).toList(),
                 roster.stream().map(Mapper::relationship).toList(),
-                catalog.all().stream().map(Mapper::exercise).toList(),
+                catalog.forWorkspace(coachId).stream().map(Mapper::exercise).toList(),
                 planList.stream().sorted(Comparator.comparing((TrainingPlan p) -> p.updatedAt).reversed()).map(Mapper::plan).toList(),
                 mine(decode(workouts, Workout.class), visible, x -> x.studentId).stream().sorted(Comparator.comparing((Workout w) -> w.startedAt).reversed()).map(Mapper::workout).toList(),
                 mine(decode(packages, SessionPackage.class), visible, x -> x.studentId).stream().map(Mapper::pkg).toList(),

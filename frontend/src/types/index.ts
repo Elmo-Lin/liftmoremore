@@ -78,7 +78,7 @@ export interface CoachStudentRelationship {
 }
 
 export type MuscleGroup = 'legs' | 'back' | 'chest' | 'shoulders' | 'arms' | 'glutes' | 'core'
-export type Equipment = 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight'
+export type Equipment = 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight' | 'kettlebell' | 'other'
 
 export interface Exercise {
   id: ID
@@ -88,6 +88,10 @@ export interface Exercise {
   equipment: Equipment
   /** Smallest practical weight jump in kg. */
   increment: number
+  /** Added by this workspace (coaches share theirs with the studio and students). */
+  custom?: boolean
+  /** A custom exercise taken off the picker; workouts that used it still show it. */
+  archived?: boolean
 }
 
 export interface ExercisePrescription {

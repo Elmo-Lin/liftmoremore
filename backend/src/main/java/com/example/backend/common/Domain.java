@@ -20,6 +20,8 @@ public final class Domain {
     public static final String SPACE_SELF = "self";
 
     public static final Set<String> GOALS = Set.of("strength", "hypertrophy", "fatLoss", "general", "powerlifting", "mobility");
+    public static final Set<String> MUSCLE_GROUPS = Set.of("legs", "back", "chest", "shoulders", "arms", "glutes", "core");
+    public static final Set<String> EQUIPMENT = Set.of("barbell", "dumbbell", "machine", "cable", "bodyweight", "kettlebell", "other");
     public static final Set<String> GENDERS = Set.of("female", "male", "other");
     public static final Set<String> STUDENT_STATUSES = Set.of("active", "inactive");
     public static final Set<String> WORKOUT_TYPES = Set.of("coached", "independent");

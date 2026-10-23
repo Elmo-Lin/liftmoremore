@@ -56,7 +56,16 @@ public final class Dtos {
 
     public record RelationshipDto(String id, String coachId, String studentId, String status, Instant startedAt) {}
 
-    public record ExerciseDto(String id, String name, String nameEn, String muscleGroup, String equipment, double increment) {}
+    /** custom: made by this workspace; archived: hidden from pickers but still shown in history. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record ExerciseDto(String id, String name, String nameEn, String muscleGroup, String equipment, double increment, Boolean custom, Boolean archived) {}
+
+    public record ExerciseInput(
+            String id,
+            @NotBlank(message = "請輸入動作名稱") @Size(max = 40, message = "動作名稱最多 40 字") String name,
+            @Size(max = 60, message = "英文名稱最多 60 字") String nameEn,
+            @NotBlank(message = "請選擇部位") String muscleGroup,
+            @NotBlank(message = "請選擇器材") String equipment) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record PrescriptionDto(

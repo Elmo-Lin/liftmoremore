@@ -1,10 +1,10 @@
-import { ArrowRight, ChartLine, Dumbbell, Ticket, Users } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { activateInvite, forgotPassword, googleSignIn, login, registerCoach, registerSelf, registerStudio, resetPassword } from '../api/auth'
 import { API_URL, ApiError, enterLocalDemo, exitLocalDemo, isApiMode } from '../api/client'
 import { GoogleButton } from '../components/auth/GoogleButton'
-import { Logo, MobileTopBar } from '../components/layout/AppShell'
+import { Logo } from '../components/layout/AppShell'
 import { DemoPersonaList } from '../components/layout/DemoPersonas'
 import { Button } from '../components/ui/Button'
 import { Segmented, TextInput } from '../components/ui/Form'
@@ -17,54 +17,19 @@ import { GOOGLE_CLIENT_ID, googleProfile } from '../lib/google'
 import { homePath } from '../lib/roles'
 import { useSession, useToast } from '../store/contexts'
 
-const FEATURES = [
-  { icon: Dumbbell, title: '快速記錄', text: '為手機設計，一組只需幾次點擊。' },
-  { icon: ChartLine, title: '看得見進步', text: '重量、訓練量與頻率一目了然。' },
-  { icon: Users, title: '學員管理', text: '教練可集中管理學員與課表。' },
-  { icon: Ticket, title: '堂數清楚', text: '記錄訓練與扣堂分開，異動都留紀錄。' },
-]
-
 const PANEL_CLASS = 'rounded-2xl bg-surface p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_0_0_0.5px_rgba(0,0,0,0.05)] md:p-8'
 
-/** Headline, features and a panel on the right (sign-in, the demo picker, password reset). */
+/**
+ * Sign-in, the demo picker and password reset: the logo (back to the home page, which explains the
+ * product) above one centred panel, so on a phone the form fits without scrolling.
+ */
 function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-dvh bg-canvas">
-      {/* Mobile: headline → panel → features, so the panel is reachable without scrolling.
-          Desktop: headline and features on the left, the panel on the right. */}
-      <MobileTopBar />
-      <div className="mx-auto grid min-h-dvh max-w-6xl content-start gap-6 px-4 pt-17 pb-6 md:grid-cols-[1.1fr_1fr] md:content-center md:gap-x-16 md:gap-y-8 md:px-8 md:py-8">
-        <section className="md:col-start-1 md:row-start-1 md:self-end">
-          {/* Phones show the logo in the fixed top bar instead. */}
-          <div className="hidden md:block">
-            <Logo />
-          </div>
-          <h1 className="text-[30px] leading-tight font-semibold tracking-tight text-ink-900 md:mt-10 md:text-[40px]">
-            {BRAND.tagline[0]}
-            <br />
-            <span className="text-accent-700">{BRAND.tagline[1]}</span>
-          </h1>
-          <p className="mt-4 max-w-md text-[15px] leading-relaxed text-ink-600">
-            為台灣自由教練打造的課程管理工具：學員、課表、堂數與訓練紀錄，一個地方搞定。自己練的人也能用它記錄訓練、追蹤進步。
-          </p>
-        </section>
-
-        <div className="md:col-start-2 md:row-span-2 md:row-start-1 md:self-center">{children}</div>
-
-        <ul className="grid max-w-lg gap-4 pb-4 sm:grid-cols-2 md:col-start-1 md:row-start-2 md:self-start md:pb-0">
-          {FEATURES.map((f) => (
-            <li key={f.title} className="flex gap-3">
-              <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-accent-700">
-                <f.icon className="size-4" />
-              </span>
-              <div>
-                <p className="text-sm font-medium text-ink-900">{f.title}</p>
-                <p className="mt-0.5 text-[13px] leading-relaxed text-ink-500">{f.text}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
+    <div className="flex min-h-dvh flex-col items-center bg-canvas px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:justify-center md:py-10">
+      <Link to="/" aria-label={`${BRAND.name} 首頁`} className="mb-5">
+        <Logo />
+      </Link>
+      <div className="w-full max-w-md">{children}</div>
     </div>
   )
 }
@@ -112,7 +77,7 @@ export function DemoPage() {
             <ArrowRight className="size-4 text-ink-400 transition-transform group-hover:translate-x-0.5 group-hover:text-accent-700" />
           </button>
         )}
-        <DemoNotice className="mt-4" />
+        <DemoNotice className="mt-4" always />
       </section>
     </AuthLayout>
   )

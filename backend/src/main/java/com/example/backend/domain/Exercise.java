@@ -1,6 +1,6 @@
 package com.example.backend.domain;
 
-/** {@code exercises/{id}} — shared catalog. */
+/** A built-in exercise (see ExerciseCatalog), or a custom one in {@code coaches/{id}/exercises/{id}}. */
 public class Exercise {
     public String id;
     public String name;
@@ -8,6 +8,11 @@ public class Exercise {
     public String muscleGroup;
     public String equipment;
     public double increment;
+    /** Custom exercises only. */
+    public String createdBy;
+    public java.time.Instant createdAt;
+    /** Hidden from pickers; old workouts still show it. */
+    public Boolean archived;
 
     public Exercise() {}
 

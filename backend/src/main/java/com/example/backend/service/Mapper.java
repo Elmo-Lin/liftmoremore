@@ -46,7 +46,8 @@ public final class Mapper {
     }
 
     public static ExerciseDto exercise(Exercise e) {
-        return new ExerciseDto(e.id, e.name, e.nameEn, e.muscleGroup, e.equipment, e.increment);
+        return new ExerciseDto(e.id, e.name, e.nameEn == null ? "" : e.nameEn, e.muscleGroup, e.equipment, e.increment,
+                e.createdAt != null ? Boolean.TRUE : null, Boolean.TRUE.equals(e.archived) ? Boolean.TRUE : null);
     }
 
     public static PlanDto plan(TrainingPlan p) {

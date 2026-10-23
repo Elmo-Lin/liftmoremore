@@ -108,6 +108,8 @@ export const EQUIPMENT_LABEL: Record<Equipment, string> = {
   machine: '機械',
   cable: '繩索',
   bodyweight: '自體重',
+  kettlebell: '壺鈴',
+  other: '其他',
 }
 
 export function givenName(name: string) {

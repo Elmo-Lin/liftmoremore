@@ -4,7 +4,6 @@ import com.example.backend.auth.CurrentUser;
 import com.example.backend.common.ApiException;
 import com.example.backend.common.Domain;
 import com.example.backend.common.Ids;
-import com.example.backend.domain.Exercise;
 import com.example.backend.domain.Student;
 import com.example.backend.domain.TrainingPlan;
 import com.example.backend.store.Db;
@@ -18,7 +17,6 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 /** Plans are coach-authored. Students can only read the plan currently assigned to them. */
@@ -58,7 +56,7 @@ public class PlanService {
         user.requireCoach();
         String planId = Ids.orNew(id, "plan");
         Domain.require(Domain.GOALS, in.goal(), "goal");
-        validateExercises(in.days());
+        validateExercises(user.coachId(), in.days());
         Instant now = Instant.now();
         var ref = db.coachDoc(user.coachId(), Db.PLANS, planId);
         TrainingPlan existing = db.get(ref, TrainingPlan.class).orElse(null);
@@ -121,8 +119,8 @@ public class PlanService {
         Db.await(batch.commit());
     }
 
-    private void validateExercises(List<TrainingDayDto> days) {
-        Set<String> known = catalog.all().stream().map((Exercise e) -> e.id).collect(Collectors.toSet());
+    private void validateExercises(String spaceId, List<TrainingDayDto> days) {
+        Set<String> known = catalog.knownIds(spaceId);
         for (TrainingDayDto d : days) {
             for (PrescriptionDto r : d.exercises()) {
                 if (!known.contains(r.exerciseId())) throw ApiException.badRequest("未知的動作：" + r.exerciseId());

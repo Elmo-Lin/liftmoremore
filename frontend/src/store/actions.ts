@@ -9,6 +9,8 @@ import type {
   AppData,
   Appointment,
   CoachMember,
+  Equipment,
+  Exercise,
   ID,
   PackagePreset,
   Role,
@@ -72,6 +74,22 @@ export function validatePackage(input: PackageInput): Record<string, string> {
 }
 
 export const MAX_PACKAGE_PRESETS = 6
+
+export type ExerciseInput = Pick<Exercise, 'name' | 'nameEn' | 'muscleGroup' | 'equipment'>
+
+/** Smallest practical weight jump for a custom exercise, by equipment (mirrors backend ExerciseService). */
+const INCREMENT: Record<Equipment, number> = { barbell: 2.5, dumbbell: 2, machine: 2.5, cable: 2.5, kettlebell: 4, bodyweight: 1, other: 1 }
+
+/** Mirrors the backend's ExerciseInput constraints; names are unique among the exercises still in use. */
+export function validateExercise(input: ExerciseInput, others: Exercise[]): Record<string, string> {
+  const errors: Record<string, string> = {}
+  const name = input.name.trim()
+  if (!name) errors.name = '請輸入動作名稱'
+  else if (name.length > 40) errors.name = '動作名稱最多 40 字'
+  else if (others.some((e) => !e.archived && e.name.toLowerCase() === name.toLowerCase())) errors.name = `已經有叫「${name}」的動作了`
+  if (input.nameEn.trim().length > 60) errors.nameEn = '英文名稱最多 60 字'
+  return errors
+}
 
 /** Mirrors the backend's PackagePresetDto constraints. */
 export function validatePreset(p: PackagePreset): string | null {
@@ -430,6 +448,47 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
       const d = get()
       if (d.transactions.some((t) => t.packageId === id)) return fail('此方案已有異動紀錄，無法刪除')
       update((d) => ({ ...d, packages: d.packages.filter((p) => p.id !== id) }))
+      return ok(undefined)
+    },
+
+    // ---------------- Custom exercises ----------------
+    /** Coaches add exercises for the whole workspace; a self-tracker's are their own. */
+    addCustomExercise(input: ExerciseInput): Result<Exercise> {
+      const d = get()
+      if (!isCoachRole(actor()) && actor() !== 'self') return fail('只有教練可以新增動作')
+      const first = Object.values(validateExercise(input, d.exercises))[0]
+      if (first) return fail(first)
+      const exercise: Exercise = {
+        id: uid('cex'),
+        name: input.name.trim(),
+        nameEn: input.nameEn.trim(),
+        muscleGroup: input.muscleGroup,
+        equipment: input.equipment,
+        increment: INCREMENT[input.equipment],
+        custom: true,
+      }
+      update((d) => ({ ...d, exercises: [...d.exercises, exercise] }))
+      return ok(exercise)
+    },
+
+    updateCustomExercise(id: ID, input: ExerciseInput): Result<Exercise> {
+      const d = get()
+      if (!isCoachRole(actor()) && actor() !== 'self') return fail('只有教練可以修改動作')
+      const current = d.exercises.find((e) => e.id === id)
+      if (!current?.custom) return fail('內建動作無法修改')
+      const first = Object.values(validateExercise(input, d.exercises.filter((e) => e.id !== id)))[0]
+      if (first) return fail(first)
+      const next: Exercise = { ...current, name: input.name.trim(), nameEn: input.nameEn.trim(), muscleGroup: input.muscleGroup, equipment: input.equipment, increment: INCREMENT[input.equipment] }
+      update((d) => ({ ...d, exercises: d.exercises.map((e) => (e.id === id ? next : e)) }))
+      return ok(next)
+    },
+
+    /** Takes a custom exercise off the picker; past workouts and plans keep showing it. */
+    archiveCustomExercise(id: ID): Result {
+      const d = get()
+      if (!isCoachRole(actor()) && actor() !== 'self') return fail('只有教練可以刪除動作')
+      if (!d.exercises.find((e) => e.id === id)?.custom) return fail('內建動作無法刪除')
+      update((d) => ({ ...d, exercises: d.exercises.map((e) => (e.id === id ? { ...e, archived: true } : e)) }))
       return ok(undefined)
     },
 

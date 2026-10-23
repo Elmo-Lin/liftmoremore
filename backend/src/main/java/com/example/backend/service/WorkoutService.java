@@ -4,7 +4,6 @@ import com.example.backend.auth.CurrentUser;
 import com.example.backend.common.ApiException;
 import com.example.backend.common.Domain;
 import com.example.backend.common.Ids;
-import com.example.backend.domain.Exercise;
 import com.example.backend.domain.SessionTransaction;
 import com.example.backend.domain.Student;
 import com.example.backend.domain.Workout;
@@ -18,7 +17,6 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 /**
@@ -72,7 +70,7 @@ public class WorkoutService {
         if (completed && in.exercises().stream().noneMatch(e -> e.sets().stream().anyMatch(SetLogDto::completed))) {
             throw ApiException.badRequest("請至少完成一組再結束訓練");
         }
-        validateExercises(in.exercises());
+        validateExercises(user.coachId(), in.exercises());
 
         var ref = db.coachDoc(user.coachId(), Db.WORKOUTS, workoutId);
         return db.transaction(tx -> {
@@ -131,8 +129,8 @@ public class WorkoutService {
         });
     }
 
-    private void validateExercises(List<ExerciseLogDto> logs) {
-        Set<String> known = catalog.all().stream().map((Exercise e) -> e.id).collect(Collectors.toSet());
+    private void validateExercises(String spaceId, List<ExerciseLogDto> logs) {
+        Set<String> known = catalog.knownIds(spaceId);
         for (ExerciseLogDto l : logs) {
             if (!known.contains(l.exerciseId())) throw ApiException.badRequest("未知的動作：" + l.exerciseId());
             for (SetLogDto s : l.sets()) {

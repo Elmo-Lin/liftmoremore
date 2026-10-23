@@ -2,6 +2,7 @@ import { CheckCircle2, Info, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { api, ApiError, isApiMode } from '../api/client'
 import { requestsFor } from '../api/sync'
+import { EXERCISES } from '../data/exercises'
 import { generateDemoData, SCHEMA_VERSION, type DemoSpace } from '../data/mock'
 import { viewAsCoach } from '../lib/scope'
 import type { AppData, DemoSession, ID, Role } from '../types'
@@ -21,7 +22,12 @@ import { dataKey, readJSON, STORAGE_KEYS, writeJSON } from './storage'
 function loadData(space: DemoSpace): AppData {
   const stored = readJSON<AppData>(dataKey(space))
   // Demo data saved before workspaces existed has no `studio`; it no longer matches any persona, so regenerate.
-  if (stored && stored.schemaVersion === SCHEMA_VERSION && Array.isArray(stored.students) && stored.studio) return stored
+  if (stored && stored.schemaVersion === SCHEMA_VERSION && Array.isArray(stored.students) && stored.studio) {
+    // Built-in exercises added since this demo was saved (custom ones it created stay as they are).
+    const known = new Set(stored.exercises.map((e) => e.id))
+    const missing = EXERCISES.filter((e) => !known.has(e.id))
+    return missing.length ? { ...stored, exercises: [...stored.exercises, ...missing] } : stored
+  }
   const fresh = generateDemoData(space)
   writeJSON(dataKey(space), fresh)
   return fresh

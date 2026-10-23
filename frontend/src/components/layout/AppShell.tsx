@@ -89,7 +89,7 @@ function useScrolled() {
 }
 
 /**
- * Phone top bar with the logo (shared by the app and the login page). Fixed, not sticky, so it
+ * Phone top bar with the logo. Fixed, not sticky, so it
  * stays put during iOS rubber-band overscroll like a native nav bar; pages pad their content by
  * its 3rem height. Scroll-edge style: page-coloured at the top (blending into the status bar, which
  * shows the page background in the installed app), material + hairline once content scrolls under it.

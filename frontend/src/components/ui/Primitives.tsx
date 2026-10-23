@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import type { HTMLAttributes, ReactNode } from 'react'
 import { Link } from 'react-router'
+import { isApiMode } from '../../api/client'
 import { initials } from '../../lib/format'
 
 /** Inset-grouped card: white, rounded, no border on the gray grouped background. */
@@ -161,7 +162,9 @@ export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { valu
   )
 }
 
-export function DemoNotice({ className = '' }: { className?: string }) {
+/** Only in the demo (made-up data); real accounts never see it. `always`: the demo's own entry page. */
+export function DemoNotice({ className = '', always = false }: { className?: string; always?: boolean }) {
+  if (isApiMode && !always) return null
   return <p className={`text-xs text-ink-400 ${className}`}>示範資料：所有人物與數據皆為虛構。</p>
 }
 

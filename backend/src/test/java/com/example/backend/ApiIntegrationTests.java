@@ -218,6 +218,47 @@ class ApiIntegrationTests {
     }
 
     @Test
+    void coachesAddCustomExercisesForTheirWorkspace() throws Exception {
+        assertThat(call(get("/api/exercises"), coach, null).body().size()).as("built-in catalog").isGreaterThanOrEqualTo(100);
+
+        Map<String, Object> input = Map.of("id", "cex_sled" + suffix, "name", "雪橇推", "nameEn", "Sled Push", "muscleGroup", "legs", "equipment", "other");
+        Resp created = call(post("/api/exercises"), coach, input);
+        assertThat(created.status()).as(String.valueOf(created.body())).isEqualTo(201);
+        assertThat(created.body().get("custom").asBoolean()).isTrue();
+        assertThat(call(post("/api/exercises"), coach, Map.of("name", "雪橇推", "muscleGroup", "legs", "equipment", "other")).status())
+                .as("same name twice").isEqualTo(409);
+        assertThat(call(post("/api/exercises"), coach, Map.of("name", "槓鈴臥推", "muscleGroup", "chest", "equipment", "barbell")).status())
+                .as("a built-in name").isEqualTo(409);
+        assertThat(call(post("/api/exercises"), coach, Map.of("name", "X", "muscleGroup", "neck", "equipment", "other")).status()).isEqualTo(400);
+
+        String sid = createStudent(coach, "cex");
+        Map<String, Object> workout = Map.of("studentId", sid, "type", "coached", "status", "completed", "title", "A",
+                "startedAt", Instant.now().toString(), "notes", "",
+                "exercises", List.of(Map.of("id", "el_1", "exerciseId", "cex_sled" + suffix,
+                        "sets", List.of(Map.of("id", "set_1", "weightKg", 40, "reps", 10, "completed", true)))));
+        assertThat(call(put("/api/workouts/wo_cex" + suffix), coach, workout).status()).isEqualTo(200);
+
+        String student = studentToken(sid);
+        assertThat(call(get("/api/bootstrap"), student, null).body().get("exercises").toString()).as("students see them").contains("雪橇推");
+        assertThat(call(post("/api/exercises"), student, Map.of("name", "學員動作", "muscleGroup", "core", "equipment", "other")).status()).isEqualTo(403);
+
+        String other = call(post("/api/auth/register"), null,
+                Map.of("name", "別的教練", "email", "cexo-" + suffix + "@example.com", "password", "password123")).body().get("token").asString();
+        assertThat(call(get("/api/bootstrap"), other, null).body().get("exercises").toString()).as("other workspaces do not").doesNotContain("雪橇推");
+
+        assertThat(call(put("/api/exercises/cex_sled" + suffix), coach, Map.of("name", "雪橇推（重）", "muscleGroup", "legs", "equipment", "other")).status()).isEqualTo(200);
+        assertThat(call(put("/api/exercises/ex_bench"), coach, Map.of("name", "改名", "muscleGroup", "chest", "equipment", "barbell")).status())
+                .as("built-ins cannot be edited").isEqualTo(404);
+        assertThat(call(delete("/api/exercises/cex_sled" + suffix), coach, null).status()).isEqualTo(204);
+        JsonNode archived = null;
+        for (JsonNode e : call(get("/api/bootstrap"), coach, null).body().get("exercises")) if (e.get("id").asString().equals("cex_sled" + suffix)) archived = e;
+        assertThat(archived).as("kept for history").isNotNull();
+        assertThat(archived.get("archived").asBoolean()).isTrue();
+        assertThat(call(post("/api/exercises"), coach, Map.of("name", "雪橇推（重）", "muscleGroup", "legs", "equipment", "other")).status())
+                .as("an archived name can be reused").isEqualTo(201);
+    }
+
+    @Test
     void deductionsUseOldestPackageFirst() throws Exception {
         String sid = createStudent(coach, "eve");
         Resp older = call(post("/api/students/" + sid + "/packages"), coach,

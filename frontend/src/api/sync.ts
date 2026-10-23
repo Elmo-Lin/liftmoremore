@@ -3,7 +3,7 @@
 // the request is then queued. IDs are generated on the client and accepted by the
 // server, so local and server state stay identical.
 import type { DataActions } from '../store/actions'
-import type { AppData, Appointment, SessionPackage, Student } from '../types'
+import type { AppData, Appointment, Exercise, SessionPackage, Student } from '../types'
 
 export interface ApiRequest {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -99,6 +99,16 @@ export function requestsFor(name: Name, args: unknown[], value: unknown, before:
       return [{ method: 'DELETE', path: `/appointments/${args[0]}` }]
     case 'deletePackage':
       return [{ method: 'DELETE', path: `/packages/${args[0]}` }]
+    case 'addCustomExercise': {
+      const e = value as Exercise
+      return [{ method: 'POST', path: '/exercises', body: { id: e.id, name: e.name, nameEn: e.nameEn, muscleGroup: e.muscleGroup, equipment: e.equipment } }]
+    }
+    case 'updateCustomExercise': {
+      const e = value as Exercise
+      return [{ method: 'PUT', path: `/exercises/${e.id}`, body: { name: e.name, nameEn: e.nameEn, muscleGroup: e.muscleGroup, equipment: e.equipment } }]
+    }
+    case 'archiveCustomExercise':
+      return [{ method: 'DELETE', path: `/exercises/${args[0]}` }]
     case 'savePackagePresets':
       return [{ method: 'PUT', path: '/me/package-presets', body: { presets: value } }]
     case 'adjustPackage': {
