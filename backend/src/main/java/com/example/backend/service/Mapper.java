@@ -32,7 +32,7 @@ public final class Mapper {
     private Mapper() {}
 
     public static CoachDto coach(Coach c, boolean includeContact) {
-        return new CoachDto(c.id, Domain.COACH, c.name, includeContact ? c.email : "", includeContact ? c.phone : null, c.title, c.studio, c.createdAt);
+        return new CoachDto(c.id, Domain.COACH, c.name, includeContact ? c.email : "", includeContact ? c.phone : null, c.title, c.studio, c.createdAt, null);
     }
 
     public static StudentDto student(Student s, boolean forCoach) {

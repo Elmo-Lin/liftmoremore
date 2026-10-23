@@ -8,12 +8,14 @@ import com.example.backend.domain.LedgerLock;
 import com.example.backend.domain.SessionPackage;
 import com.example.backend.domain.SessionTransaction;
 import com.example.backend.domain.Student;
+import com.example.backend.domain.UserAccount;
 import com.example.backend.domain.Workout;
 import com.example.backend.service.Ledger.PackageBalance;
 import com.example.backend.store.Db;
 import com.example.backend.web.Dtos.AdjustmentInput;
 import com.example.backend.web.Dtos.BalanceDto;
 import com.example.backend.web.Dtos.LedgerResult;
+import com.example.backend.web.Dtos.PackagePresetDto;
 import com.example.backend.web.Dtos.PackageDto;
 import com.example.backend.web.Dtos.PackageInput;
 import com.example.backend.web.Dtos.TransactionDto;
@@ -22,6 +24,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 
 /**
@@ -72,6 +75,21 @@ public class BillingService {
     }
 
     // ----------------------------------------------------------------------------- packages
+
+    /** Replaces the caller's own quick-select options; an empty list hides quick select. */
+    public List<PackagePresetDto> savePresets(CurrentUser user, List<PackagePresetDto> presets) {
+        user.requireCoach();
+        List<PackagePresetDto> saved = presets.stream().map(p -> new PackagePresetDto(p.name().trim(), p.totalSessions(), p.priceTwd())).toList();
+        List<Map<String, Object>> docs = saved.stream().map(p -> {
+            UserAccount.PackagePreset doc = new UserAccount.PackagePreset();
+            doc.name = p.name();
+            doc.totalSessions = p.totalSessions();
+            doc.priceTwd = p.priceTwd();
+            return db.encode(doc);
+        }).toList();
+        db.update(db.doc(Db.USERS, user.userId()), "packagePresets", docs);
+        return saved;
+    }
 
     public PackageDto addPackage(CurrentUser user, String studentId, PackageInput in) {
         Student s = access.coachStudent(user, studentId);

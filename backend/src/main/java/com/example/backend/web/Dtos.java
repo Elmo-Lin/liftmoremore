@@ -23,7 +23,15 @@ public final class Dtos {
     // ------------------------------------------------------------------ read models
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record CoachDto(String id, String role, String name, String email, String phone, String title, String studio, Instant createdAt) {}
+    public record CoachDto(
+            String id, String role, String name, String email, String phone, String title, String studio, Instant createdAt,
+            List<PackagePresetDto> packagePresets) {}
+
+    /** A coach's quick-select option for new session packages (only sent to that coach). */
+    public record PackagePresetDto(
+            @NotBlank(message = "請輸入方案名稱") @Size(max = 40) String name,
+            @Min(value = 1, message = "堂數需為 1–200 的整數") @Max(value = 200, message = "堂數需為 1–200 的整數") int totalSessions,
+            @Min(value = 0, message = "金額不可為負數") int priceTwd) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record StudentDto(
@@ -222,6 +230,8 @@ public final class Dtos {
             @NotNull(message = "請選擇購買日期") Instant purchaseDate,
             Instant expiresAt,
             @Size(max = 200) String notes) {}
+
+    public record PackagePresetsInput(@NotNull @Size(max = 6, message = "快速選項最多 6 個") @Valid List<PackagePresetDto> presets) {}
 
     public record AdjustmentInput(
             String id,

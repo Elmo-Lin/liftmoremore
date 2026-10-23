@@ -27,6 +27,15 @@ export interface Coach extends User {
   role: 'coach'
   title: string
   studio: string
+  /** Own profile only: quick-select options when adding a package. Undefined until customized (defaults apply). */
+  packagePresets?: PackagePreset[]
+}
+
+/** A coach's quick-select option for new session packages. */
+export interface PackagePreset {
+  name: string
+  totalSessions: number
+  priceTwd: number
 }
 
 export type StudentStatus = 'active' | 'inactive'
@@ -217,6 +226,8 @@ export interface CoachMember {
   status: CoachMemberStatus
   /** Owner only, while the coach has not activated their account. */
   inviteCode?: string
+  /** Offline demo only: a studio coach's own quick-select options (see Coach.packagePresets). */
+  packagePresets?: PackagePreset[]
   createdAt: ISODate
 }
 

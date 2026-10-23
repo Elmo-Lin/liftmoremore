@@ -1,6 +1,7 @@
 package com.example.backend.domain;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * {@code users/{id}} — login identity for coaches and students.
@@ -21,5 +22,13 @@ public class UserAccount {
     public Boolean active;
     /** Studio coaches: outstanding invite code until they activate. */
     public String inviteCode;
+    /** Coaches: quick-select options when adding a session package; null until they customize (the UI shows defaults). */
+    public List<PackagePreset> packagePresets;
     public Instant createdAt;
+
+    public static class PackagePreset {
+        public String name;
+        public int totalSessions;
+        public int priceTwd;
+    }
 }

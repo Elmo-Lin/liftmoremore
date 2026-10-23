@@ -16,6 +16,7 @@ import com.example.backend.web.Dtos.CoachDto;
 import com.example.backend.web.Dtos.CoachInviteDto;
 import com.example.backend.web.Dtos.CoachMemberDto;
 import com.example.backend.web.Dtos.InviteCoachInput;
+import com.example.backend.web.Dtos.PackagePresetDto;
 import com.example.backend.web.Dtos.StudioDto;
 import java.time.Duration;
 import java.time.Instant;
@@ -68,7 +69,10 @@ public class StudioService {
         UserAccount u = Domain.SPACE_SELF.equals(space.kind) ? null : db.get(db.doc(Db.USERS, coachId), UserAccount.class).orElse(null);
         if (u == null) return Mapper.coach(space, includeContact);
         String title = u.title != null ? u.title : u.id.equals(space.id) ? space.title : "教練";
-        return new CoachDto(u.id, Domain.COACH, u.name, includeContact ? u.email : "", includeContact ? u.phone : null, title, space.studio, u.createdAt);
+        List<PackagePresetDto> presets = includeContact && u.packagePresets != null
+                ? u.packagePresets.stream().map(p -> new PackagePresetDto(p.name, p.totalSessions, p.priceTwd)).toList()
+                : null;
+        return new CoachDto(u.id, Domain.COACH, u.name, includeContact ? u.email : "", includeContact ? u.phone : null, title, space.studio, u.createdAt, presets);
     }
 
     // ----------------------------------------------------------------------------- owner actions

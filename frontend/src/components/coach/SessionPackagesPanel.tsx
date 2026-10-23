@@ -1,11 +1,11 @@
-import { Minus, Pencil, Plus, SlidersHorizontal, Ticket, Trash2 } from 'lucide-react'
+import { Minus, Pencil, Plus, SlidersHorizontal, Ticket, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { formatDate, formatDateTime, fromDateInput, toDateInput, twd } from '../../lib/format'
 import { packageBalance, type PackageBalance } from '../../lib/sessions'
-import { validatePackage, type PackageInput } from '../../store/actions'
+import { MAX_PACKAGE_PRESETS, validatePackage, validatePreset, type PackageInput } from '../../store/actions'
 import { useData, useToast } from '../../store/contexts'
 import { selectBalance } from '../../store/selectors'
-import type { ID, SessionPackage, TransactionType } from '../../types'
+import type { ID, PackagePreset, SessionPackage, TransactionType } from '../../types'
 import { Button, IconButton } from '../ui/Button'
 import { Segmented, TextArea, TextInput } from '../ui/Form'
 import { ConfirmDialog, Modal } from '../ui/Modal'
@@ -205,19 +205,41 @@ export function SessionPackagesPanel({ studentId }: { studentId: ID }) {
   )
 }
 
-const PRESETS = [
-  { sessions: 10, price: 18000 },
-  { sessions: 20, price: 34000 },
+/** Shown until a coach customizes their own quick-select options. */
+const DEFAULT_PRESETS: PackagePreset[] = [
+  { name: '10 堂一對一課程', totalSessions: 10, priceTwd: 18000 },
+  { name: '20 堂一對一課程', totalSessions: 20, priceTwd: 34000 },
 ]
 
 function PackageFormModal({ pkg, onClose, onSubmit }: { pkg?: SessionPackage; onClose: () => void; onSubmit: (input: PackageInput) => boolean }) {
-  const [name, setName] = useState(pkg?.name ?? '10 堂一對一課程')
-  const [sessions, setSessions] = useState(String(pkg?.totalSessions ?? 10))
-  const [price, setPrice] = useState(String(pkg?.priceTwd ?? 18000))
+  const { data, actions } = useData()
+  const notify = useToast()
+  const presets = data.coach.packagePresets ?? DEFAULT_PRESETS
+  const first = pkg ? undefined : presets[0]
+  const [name, setName] = useState(pkg?.name ?? first?.name ?? '')
+  const [sessions, setSessions] = useState(String(pkg?.totalSessions ?? first?.totalSessions ?? ''))
+  const [price, setPrice] = useState(String(pkg?.priceTwd ?? first?.priceTwd ?? ''))
   const [purchase, setPurchase] = useState(toDateInput(pkg?.purchaseDate ?? new Date()))
   const [expires, setExpires] = useState(pkg?.expiresAt ? toDateInput(pkg.expiresAt) : '')
   const [notes, setNotes] = useState(pkg?.notes ?? '')
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [managing, setManaging] = useState(false)
+
+  const current: PackagePreset = { name: name.trim(), totalSessions: Number(sessions), priceTwd: Number(price || 0) }
+  const isCurrent = (p: PackagePreset) => p.name === current.name && p.totalSessions === current.totalSessions && p.priceTwd === current.priceTwd
+
+  const savePresets = (next: PackagePreset[], message: string) => {
+    const res = actions.savePackagePresets(next)
+    notify(res.ok ? message : res.error, res.ok ? 'success' : 'error')
+  }
+
+  const addPreset = () => {
+    const error = validatePreset(current)
+    if (error) return notify(`無法加入快速選項：${error}`, 'error')
+    if (presets.some(isCurrent)) return notify('快速選項中已有相同的方案', 'info')
+    if (presets.length >= MAX_PACKAGE_PRESETS) return notify(`快速選項最多 ${MAX_PACKAGE_PRESETS} 個`, 'error')
+    savePresets([...presets, current], `已加入快速選項「${current.name}」`)
+  }
 
   const input = (): PackageInput => ({
     name,
@@ -258,26 +280,55 @@ function PackageFormModal({ pkg, onClose, onSubmit }: { pkg?: SessionPackage; on
       <form id="package-form" onSubmit={submit} noValidate className="grid gap-4 sm:grid-cols-2">
         {!pkg && (
           <div className="sm:col-span-2">
-            <p className="mb-1.5 text-[13px] font-medium text-ink-700">快速選擇</p>
-            <div className="flex gap-2">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.sessions}
-                  type="button"
-                  onClick={() => {
-                    setSessions(String(p.sessions))
-                    setPrice(String(p.price))
-                    setName(`${p.sessions} 堂一對一課程`)
-                  }}
-                  className={`flex-1 rounded-lg border px-3 py-2.5 text-left text-sm ${
-                    Number(sessions) === p.sessions ? 'border-accent-600 bg-accent-50' : 'border-line hover:bg-subtle'
-                  }`}
-                >
-                  <span className="block font-medium text-ink-900">{p.sessions} 堂</span>
-                  <span className="text-xs text-ink-500">{twd(p.price)}</span>
-                </button>
-              ))}
+            <div className="mb-1.5 flex items-center justify-between">
+              <p className="text-[13px] font-medium text-ink-700">快速選擇</p>
+              <button type="button" onClick={() => setManaging((m) => !m)} className="text-[13px] font-medium text-accent-700 hover:underline">
+                {managing ? '完成' : '管理'}
+              </button>
             </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {presets.map((p, i) => (
+                <div key={`${p.name}-${i}`} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setName(p.name)
+                      setSessions(String(p.totalSessions))
+                      setPrice(String(p.priceTwd))
+                    }}
+                    className={`h-full w-full rounded-lg border px-3 py-2.5 text-left text-sm ${managing ? 'pr-9' : ''} ${
+                      isCurrent(p) ? 'border-accent-600 bg-accent-50' : 'border-line hover:bg-subtle'
+                    }`}
+                  >
+                    <span className="block truncate font-medium text-ink-900">{p.name}</span>
+                    <span className="text-xs text-ink-500">
+                      {p.totalSessions} 堂・{twd(p.priceTwd)}
+                    </span>
+                  </button>
+                  {managing && (
+                    <IconButton
+                      icon={X}
+                      label={`移除「${p.name}」`}
+                      size="sm"
+                      tone="danger"
+                      className="absolute top-1 right-1"
+                      onClick={() => savePresets(presets.filter((_, j) => j !== i), `已移除快速選項「${p.name}」`)}
+                    />
+                  )}
+                </div>
+              ))}
+              {(managing || presets.length === 0) && presets.length < MAX_PACKAGE_PRESETS && (
+                <button
+                  type="button"
+                  onClick={addPreset}
+                  className="flex min-h-[60px] items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-strong px-3 py-2.5 text-sm text-ink-600 hover:bg-subtle"
+                >
+                  <Plus className="size-4" strokeWidth={2} />
+                  將下方設定存為快速選項
+                </button>
+              )}
+            </div>
+            {managing && <p className="mt-1.5 text-xs text-ink-500">先在下方填好方案名稱、堂數與金額，再存為快速選項。只有你看得到自己的快速選項。</p>}
           </div>
         )}
         <TextInput label="方案名稱" required containerClassName="sm:col-span-2" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} error={errors.name} />

@@ -197,6 +197,27 @@ class ApiIntegrationTests {
     }
 
     @Test
+    void coachesKeepTheirOwnPackagePresets() throws Exception {
+        assertThat(call(get("/api/bootstrap"), coach, null).body().get("coach").has("packagePresets")).as("unset until customized").isFalse();
+        var presets = Map.of("presets", List.of(Map.of("name", " 8 堂體驗 ", "totalSessions", 8, "priceTwd", 12000)));
+        Resp r = call(put("/api/me/package-presets"), coach, presets);
+        assertThat(r.status()).as(String.valueOf(r.body())).isEqualTo(200);
+        JsonNode saved = call(get("/api/bootstrap"), coach, null).body().get("coach").get("packagePresets");
+        assertThat(saved.size()).isEqualTo(1);
+        assertThat(saved.get(0).get("name").asString()).isEqualTo("8 堂體驗");
+        assertThat(saved.get(0).get("priceTwd").asInt()).isEqualTo(12000);
+
+        assertThat(call(put("/api/me/package-presets"), coach, Map.of("presets", List.of(Map.of("name", "x", "totalSessions", 0, "priceTwd", 0)))).status())
+                .isEqualTo(400);
+        assertThat(call(put("/api/me/package-presets"), coach, Map.of("presets", List.of())).status()).isEqualTo(200);
+        assertThat(call(get("/api/bootstrap"), coach, null).body().get("coach").get("packagePresets").size()).as("empty list is kept").isZero();
+
+        String student = studentToken(createStudent(coach, "pia"));
+        assertThat(call(put("/api/me/package-presets"), student, presets).status()).isEqualTo(403);
+        assertThat(call(get("/api/bootstrap"), student, null).body().get("coach").has("packagePresets")).as("never shown to students").isFalse();
+    }
+
+    @Test
     void deductionsUseOldestPackageFirst() throws Exception {
         String sid = createStudent(coach, "eve");
         Resp older = call(post("/api/students/" + sid + "/packages"), coach,

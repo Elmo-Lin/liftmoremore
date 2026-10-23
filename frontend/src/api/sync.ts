@@ -99,6 +99,8 @@ export function requestsFor(name: Name, args: unknown[], value: unknown, before:
       return [{ method: 'DELETE', path: `/appointments/${args[0]}` }]
     case 'deletePackage':
       return [{ method: 'DELETE', path: `/packages/${args[0]}` }]
+    case 'savePackagePresets':
+      return [{ method: 'PUT', path: '/me/package-presets', body: { presets: value } }]
     case 'adjustPackage': {
       const tx = newTransactions(before, after)[0]
       return [{ method: 'POST', path: `/packages/${args[0]}/adjustments`, body: { id: tx?.id, delta: args[1], reason: tx?.reason ?? args[2] } }]

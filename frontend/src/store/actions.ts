@@ -9,6 +9,7 @@ import type {
   Appointment,
   CoachMember,
   ID,
+  PackagePreset,
   Role,
   SessionPackage,
   Student,
@@ -67,6 +68,17 @@ export function validatePackage(input: PackageInput): Record<string, string> {
   if (input.expiresAt && input.purchaseDate && input.expiresAt < input.purchaseDate)
     errors.expiresAt = '到期日不可早於購買日'
   return errors
+}
+
+export const MAX_PACKAGE_PRESETS = 6
+
+/** Mirrors the backend's PackagePresetDto constraints. */
+export function validatePreset(p: PackagePreset): string | null {
+  if (!p.name.trim()) return '請輸入方案名稱'
+  if (p.name.trim().length > 40) return '方案名稱最多 40 字'
+  if (!Number.isInteger(p.totalSessions) || p.totalSessions < 1 || p.totalSessions > 200) return '堂數需為 1–200 的整數'
+  if (!Number.isInteger(p.priceTwd) || p.priceTwd < 0) return '金額不可為負數'
+  return null
 }
 
 /** Seats count the owner and every coach who is active or invited. */
@@ -414,6 +426,24 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
       if (d.transactions.some((t) => t.packageId === id)) return fail('此方案已有異動紀錄，無法刪除')
       update((d) => ({ ...d, packages: d.packages.filter((p) => p.id !== id) }))
       return ok(undefined)
+    },
+
+    /** Replaces the signed-in coach's own quick-select options. */
+    savePackagePresets(presets: PackagePreset[]): Result<PackagePreset[]> {
+      if (!isCoachRole(actor())) return fail('只有教練可以設定快速選項')
+      if (presets.length > MAX_PACKAGE_PRESETS) return fail(`快速選項最多 ${MAX_PACKAGE_PRESETS} 個`)
+      for (const p of presets) {
+        const error = validatePreset(p)
+        if (error) return fail(error)
+      }
+      const saved = presets.map((p) => ({ name: p.name.trim(), totalSessions: p.totalSessions, priceTwd: p.priceTwd }))
+      const coach = actingCoach()
+      update((d) =>
+        coach && d.studio
+          ? { ...d, studio: { ...d.studio, coaches: d.studio.coaches.map((c) => (c.id === coach ? { ...c, packagePresets: saved } : c)) } }
+          : { ...d, coach: { ...d.coach, packagePresets: saved } },
+      )
+      return ok(saved)
     },
 
     adjustPackage(packageId: ID, delta: number, reason: string): Result<number> {

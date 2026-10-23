@@ -11,7 +11,7 @@ export function viewAsCoach(d: AppData, coachId: ID): AppData {
   const own = <T extends { studentId: ID }>(list: T[]) => list.filter((x) => mine.has(x.studentId))
   return {
     ...d,
-    coach: { id: me.id, role: 'coach', name: me.name, email: me.email, title: me.title ?? '教練', studio: d.coach.studio, createdAt: me.createdAt },
+    coach: { id: me.id, role: 'coach', name: me.name, email: me.email, title: me.title ?? '教練', studio: d.coach.studio, createdAt: me.createdAt, packagePresets: me.packagePresets },
     students: d.students.filter((s) => mine.has(s.id)),
     relationships: own(d.relationships),
     workouts: own(d.workouts),
