@@ -1,15 +1,15 @@
 import { ArrowLeftRight, Building2, LogOut, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { exitLocalDemo, isApiMode, isLocalDemo } from '../../api/client'
-import { DEFAULT_DEMO_STUDENT_ID, DEMO_COACH_ROLE } from '../../data/mock'
+import { enterLocalDemo, exitLocalDemo, isApiMode, isLocalDemo } from '../../api/client'
+import { demoHome, demoPersonaOf, demoPersonaTitle, demoSession, type DemoPersona } from '../../data/mock'
 import { isCoachRole, ROLE_LABEL } from '../../lib/roles'
 import { useData, useSession, useToast } from '../../store/contexts'
 import { selectIsStudio } from '../../store/selectors'
 import { Button } from '../ui/Button'
-import { Segmented } from '../ui/Form'
 import { ConfirmDialog, Modal } from '../ui/Modal'
-import { Avatar, Badge } from '../ui/Primitives'
+import { Avatar } from '../ui/Primitives'
+import { DemoPersonaList } from './DemoPersonas'
 
 type Placement = 'sidebar' | 'topbar'
 
@@ -98,47 +98,31 @@ function AccountMenu({ placement }: { placement: Placement }) {
   )
 }
 
-/** Offline demo: switch between the demo coach (a studio owner) and any student; reset the data. */
+/** Offline demo: switch between the six demo identities (each switch reloads into its workspace); reset or leave. */
 function DemoRoleSwitcher({ placement }: { placement: Placement }) {
   const { data, actions } = useData()
-  const { session, signIn, signOut } = useSession()
+  const { session, signOut } = useSession()
   const navigate = useNavigate()
   const notify = useToast()
   const [open, setOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
-  const [role, setRole] = useState<'coach' | 'student'>(isCoachRole(session?.role) ? 'coach' : 'student')
-  const [studentId, setStudentId] = useState(session?.studentId ?? DEFAULT_DEMO_STUDENT_ID)
 
+  const persona = demoPersonaOf(session)
   const student = data.students.find((s) => s.id === session?.studentId)
   const isCoach = isCoachRole(session?.role)
   const displayName = isCoach ? data.coach.name : (student?.name ?? '學員')
   const displayId = isCoach ? data.coach.id : (student?.id ?? 'x')
 
-  const openSwitcher = () => {
-    setRole(isCoachRole(session?.role) ? 'coach' : 'student')
-    setStudentId(session?.studentId && data.students.some((s) => s.id === session.studentId) ? session.studentId : data.students[0]?.id)
-    setOpen(true)
-  }
-
-  const apply = () => {
-    if (role === 'student' && !data.students.some((s) => s.id === studentId)) {
-      notify('請選擇要檢視的學員', 'error')
-      return
-    }
-    const name = data.students.find((s) => s.id === studentId)?.name
-    signIn({ role: role === 'coach' ? DEMO_COACH_ROLE : 'student', studentId })
-    setOpen(false)
-    navigate(role === 'coach' ? '/coach' : '/student')
-    notify(role === 'coach' ? '已切換為教練身分' : `已切換為學員：${name}`, 'info')
+  const pick = (p: DemoPersona) => {
+    if (p === persona) return setOpen(false)
+    if (!enterLocalDemo(demoSession(p), demoHome(p))) notify('此瀏覽器無法儲存示範資料', 'error')
   }
 
   const reset = () => {
     actions.resetDemo()
     setConfirmReset(false)
     setOpen(false)
-    // The demo student may no longer exist after a reset (e.g. if they were deleted and re-seeded).
-    if (session?.role === 'student') signIn({ role: 'student', studentId: DEFAULT_DEMO_STUDENT_ID })
-    navigate(session?.role === 'student' ? '/student' : '/coach')
+    navigate(demoHome(persona))
     notify('示範資料已重設')
   }
 
@@ -150,101 +134,51 @@ function DemoRoleSwitcher({ placement }: { placement: Placement }) {
             <Avatar name={displayName} id={displayId} size="sm" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-ink-900">{displayName}</p>
-              <p className="text-xs text-ink-500">{isCoach ? '教練' : '學員'}・示範模式</p>
+              <p className="truncate text-xs text-ink-500">{demoPersonaTitle(persona)}・示範模式</p>
             </div>
           </div>
-          <Button variant="secondary" size="sm" icon={ArrowLeftRight} className="mt-3 w-full" onClick={openSwitcher}>
+          <Button variant="secondary" size="sm" icon={ArrowLeftRight} className="mt-3 w-full" onClick={() => setOpen(true)}>
             切換示範身分
           </Button>
         </div>
       ) : (
         <button
           type="button"
-          onClick={openSwitcher}
+          onClick={() => setOpen(true)}
           className="flex h-9 items-center gap-2 rounded-full bg-fill py-1 pr-3 pl-1 text-[13px] font-medium text-ink-800"
           aria-label="切換示範身分"
         >
           <Avatar name={displayName} id={displayId} size="sm" />
-          <span className="max-w-24 truncate">{isCoach ? '教練' : displayName}</span>
+          <span className="max-w-24 truncate">{displayName}</span>
           <ArrowLeftRight className="size-3.5 text-ink-400" />
         </button>
       )}
 
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title="示範身分切換"
-        description="此為示範版本，無需登入。切換身分以測試教練與學員的不同介面。"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setOpen(false)} className="h-11 md:h-10">
-              取消
-            </Button>
-            <Button onClick={apply} className="h-11 md:h-10">
-              套用
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-5">
-          <div>
-            <p className="mb-2 text-[13px] font-medium text-ink-700">身分</p>
-            <Segmented
-              label="身分"
-              value={role}
-              onChange={setRole}
-              options={[
-                { value: 'coach', label: '教練' },
-                { value: 'student', label: '學員' },
-              ]}
-            />
-          </div>
-          {role === 'student' && (
-            <div>
-              <p className="mb-2 text-[13px] font-medium text-ink-700">以哪位學員檢視</p>
-              <div className="grid max-h-64 gap-1.5 overflow-y-auto sm:grid-cols-2">
-                {data.students.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setStudentId(s.id)}
-                    aria-pressed={studentId === s.id}
-                    className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left text-sm transition-colors ${
-                      studentId === s.id ? 'border-accent-600 bg-accent-50' : 'border-line hover:bg-subtle'
-                    }`}
-                  >
-                    <Avatar name={s.name} id={s.id} size="sm" />
-                    <span className="flex-1 truncate font-medium text-ink-800">{s.name}</span>
-                    {s.status === 'inactive' && <Badge>暫停</Badge>}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          <div className="flex flex-col gap-2 border-t border-line pt-4 sm:flex-row">
-            <Button variant="ghost" size="sm" icon={RotateCcw} onClick={() => setConfirmReset(true)}>
-              重設示範資料
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={LogOut}
-              onClick={() => {
-                if (isLocalDemo) return exitLocalDemo()
-                signOut()
-                navigate('/login')
-              }}
-            >
-              {isLocalDemo ? '離開示範' : '回到登入頁'}
-            </Button>
-          </div>
+      <Modal open={open} onClose={() => setOpen(false)} title="示範身分切換" description="此為示範版本，無需登入。工作室、自由教練與自主訓練是三份各自獨立的資料。">
+        <DemoPersonaList current={persona} onPick={pick} />
+        <div className="mt-5 flex flex-col gap-2 border-t border-line pt-4 sm:flex-row">
+          <Button variant="ghost" size="sm" icon={RotateCcw} onClick={() => setConfirmReset(true)}>
+            重設這份示範資料
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={LogOut}
+            onClick={() => {
+              if (isLocalDemo) return exitLocalDemo()
+              signOut()
+              navigate('/login')
+            }}
+          >
+            {isLocalDemo ? '離開示範' : '回到登入頁'}
+          </Button>
         </div>
       </Modal>
 
       <ConfirmDialog
         open={confirmReset}
         title="重設示範資料？"
-        description="所有新增的學員、課程、訓練計畫、訓練紀錄與堂數異動都會被清除，並重新產生示範資料。"
+        description="這份示範資料中新增的學員、課程、訓練計畫、訓練紀錄與堂數異動都會被清除，並重新產生。"
         confirmLabel="重設"
         tone="danger"
         onConfirm={reset}

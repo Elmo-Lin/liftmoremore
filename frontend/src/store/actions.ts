@@ -1,6 +1,6 @@
 // All mutations of AppData go through these actions. Each validates against
 // the latest state and returns a Result so the UI can show a precise error.
-import { generateMockData } from '../data/mock'
+import { demoSpaceOf, generateDemoData } from '../data/mock'
 import { uid } from '../lib/id'
 import { isCoachRole } from '../lib/roles'
 import { deductionBlocker, deductionFor, packageBalance, studentBalance } from '../lib/sessions'
@@ -74,12 +74,14 @@ export const seatsOf = (d: AppData) => d.studio?.maxCoaches ?? 3
 export const seatsUsed = (d: AppData) => d.studio?.coaches.filter((c) => c.status !== 'inactive').length ?? 1
 const isActiveCoach = (d: AppData, id: ID) => d.studio?.coaches.some((c) => c.id === id && c.status === 'active') ?? id === d.coach.id
 
-export function createActions(get: () => AppData, set: (next: AppData) => void, actor: () => Role) {
+/** `actingCoach`: offline demo only, the studio coach the demo is acting as (undefined = the workspace's owner). */
+export function createActions(get: () => AppData, set: (next: AppData) => void, actor: () => Role, actingCoach: () => ID | undefined = () => undefined) {
   const update = (fn: (d: AppData) => AppData) => set(fn(get()))
 
   return {
+    /** Regenerates the current demo workspace only. */
     resetDemo() {
-      set(generateMockData())
+      set(generateDemoData(demoSpaceOf(get())))
     },
 
     // ---------------- Students ----------------
@@ -89,8 +91,9 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
       const errors = validateStudent(input, d.students)
       const first = Object.values(errors)[0]
       if (first) return fail(first)
-      const teacher = coachId ?? d.coach.id
-      if (teacher !== d.coach.id && (actor() !== 'owner' || !isActiveCoach(d, teacher))) return fail('找不到此教練')
+      const self = actingCoach() ?? d.coach.id
+      const teacher = coachId ?? self
+      if (teacher !== self && (actor() !== 'owner' || !isActiveCoach(d, teacher))) return fail('找不到此教練')
       const now = nowISO()
       const student: Student = {
         ...input,
@@ -277,9 +280,13 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
     assignPlan(planId: ID, studentIds: ID[]): Result {
       if (!get().plans.some((p) => p.id === planId)) return fail('找不到計畫')
       const chosen = new Set(studentIds)
+      // A studio coach only (un)assigns their own students; others on the shared plan keep it.
+      const coach = actingCoach()
+      const mine = (d: AppData, id: ID) => !coach || d.relationships.some((r) => r.studentId === id && r.coachId === coach)
       update((d) => ({
         ...d,
         students: d.students.map((s) => {
+          if (!mine(d, s.id)) return s
           if (chosen.has(s.id)) return { ...s, activePlanId: planId }
           if (s.activePlanId === planId) return { ...s, activePlanId: undefined }
           return s

@@ -2,8 +2,9 @@ import { CheckCircle2, Info, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { api, ApiError, isApiMode } from '../api/client'
 import { requestsFor } from '../api/sync'
-import { generateMockData, SCHEMA_VERSION } from '../data/mock'
-import type { AppData, DemoSession, Role } from '../types'
+import { generateDemoData, SCHEMA_VERSION, type DemoSpace } from '../data/mock'
+import { viewAsCoach } from '../lib/scope'
+import type { AppData, DemoSession, ID, Role } from '../types'
 import { createActions, type DataActions } from './actions'
 import {
   DataContext,
@@ -15,13 +16,14 @@ import {
   type Toast,
   type ToastKind,
 } from './contexts'
-import { readJSON, STORAGE_KEYS, writeJSON } from './storage'
+import { dataKey, readJSON, STORAGE_KEYS, writeJSON } from './storage'
 
-function loadData(): AppData {
-  const stored = readJSON<AppData>(STORAGE_KEYS.data)
-  if (stored && stored.schemaVersion === SCHEMA_VERSION && Array.isArray(stored.students)) return stored
-  const fresh = generateMockData()
-  writeJSON(STORAGE_KEYS.data, fresh)
+function loadData(space: DemoSpace): AppData {
+  const stored = readJSON<AppData>(dataKey(space))
+  // Demo data saved before workspaces existed has no `studio`; it no longer matches any persona, so regenerate.
+  if (stored && stored.schemaVersion === SCHEMA_VERSION && Array.isArray(stored.students) && stored.studio) return stored
+  const fresh = generateDemoData(space)
+  writeJSON(dataKey(space), fresh)
   return fresh
 }
 
@@ -50,8 +52,11 @@ function emptyData(): AppData {
  * sync queue that mirrors every successful local action to the backend.
  */
 function createDataStore(onSignOut: () => void, notify: (m: string, k?: ToastKind) => void) {
-  let data = isApiMode ? emptyData() : loadData()
+  // Offline demo: the workspace of whoever is signed in (switching persona can switch workspace).
+  let space: DemoSpace = readJSON<DemoSession>(STORAGE_KEYS.session)?.space ?? 'studio'
+  let data = isApiMode ? emptyData() : loadData(space)
   let role: Role = 'coach'
+  let actingCoach: ID | undefined
   let token: string | undefined
   let status: SyncStatus = isApiMode ? 'loading' : 'local'
   let queue: Promise<unknown> = Promise.resolve()
@@ -63,7 +68,7 @@ function createDataStore(onSignOut: () => void, notify: (m: string, k?: ToastKin
     getStatus: () => status,
     set: (next: AppData) => {
       data = next
-      if (!isApiMode) writeJSON(STORAGE_KEYS.data, next)
+      if (!isApiMode) writeJSON(dataKey(space), next)
       emit()
     },
     /** Replace without persisting (used when another tab already wrote, or after a download). */
@@ -72,6 +77,8 @@ function createDataStore(onSignOut: () => void, notify: (m: string, k?: ToastKin
       emit()
     },
     getRole: () => role,
+    getSpace: () => space,
+    getActingCoach: () => actingCoach,
     subscribe: (l: () => void) => {
       listeners.add(l)
       return () => listeners.delete(l)
@@ -80,7 +87,17 @@ function createDataStore(onSignOut: () => void, notify: (m: string, k?: ToastKin
     /** Called whenever the signed-in session changes. */
     setSession: (s: DemoSession | null) => {
       role = s?.role ?? 'coach'
-      if (!isApiMode || s?.token === token) return
+      actingCoach = s?.coachId
+      if (!isApiMode) {
+        const next = s?.space ?? 'studio'
+        if (next !== space) {
+          space = next
+          data = loadData(space)
+          emit()
+        }
+        return
+      }
+      if (s?.token === token) return
       token = s?.token
       // Never show one account's data to the next: start from empty on every sign-in/out.
       data = emptyData()
@@ -162,8 +179,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const { session, signOut } = useSession()
   const notify = useToast()
   const [store] = useState(() => createDataStore(signOut, notify))
-  const [actions] = useState(() => store.syncActions(createActions(store.get, store.set, store.getRole)))
-  const data = useSyncExternalStore(store.subscribe, store.get)
+  const [actions] = useState(() => store.syncActions(createActions(store.get, store.set, store.getRole, store.getActingCoach)))
+  const all = useSyncExternalStore(store.subscribe, store.get)
+  // Offline demo acting as a studio coach: show only what that coach would see from the server.
+  const data = useMemo(() => (!isApiMode && session?.role === 'coach' && session.coachId ? viewAsCoach(all, session.coachId) : all), [all, session])
   const status = useSyncExternalStore(store.subscribe, store.getStatus)
 
   useEffect(() => {
@@ -174,7 +193,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isApiMode) return
     const onStorage = (e: StorageEvent) => {
-      if (e.key !== STORAGE_KEYS.data || !e.newValue) return
+      if (e.key !== dataKey(store.getSpace()) || !e.newValue) return
       try {
         store.replace(JSON.parse(e.newValue) as AppData)
       } catch {
@@ -185,7 +204,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('storage', onStorage)
   }, [store])
 
-  const value = useMemo(() => ({ data, actions, status, reload: store.reload }), [data, actions, status, store])
+  const value = useMemo(() => ({ data, everything: all, actions, status, reload: store.reload }), [data, all, actions, status, store])
   // Before the session effect runs on a fresh sign-in, the store may still hold no data.
   const waiting = isApiMode && session?.token && (status !== 'ready' || !data.coach.id)
   return (

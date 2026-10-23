@@ -23,13 +23,17 @@ function readLocalDemoFlag() {
 export const isLocalDemo = Boolean(API_URL) && readLocalDemoFlag()
 export const isApiMode = Boolean(API_URL) && !isLocalDemo
 
+/**
+ * Starts (or switches to) a demo identity with a full page load, so the data store opens that
+ * identity's demo workspace. On a backend-connected site it also turns on the browser-only demo.
+ */
 export function enterLocalDemo(session: DemoSession, path: string) {
   try {
-    localStorage.setItem(LOCAL_DEMO_KEY, '1')
+    if (API_URL) localStorage.setItem(LOCAL_DEMO_KEY, '1')
+    localStorage.setItem(STORAGE_KEYS.session, JSON.stringify(session))
   } catch {
     return false
   }
-  writeJSON(STORAGE_KEYS.session, session)
   window.location.assign(path)
   return true
 }

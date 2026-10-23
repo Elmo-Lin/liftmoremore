@@ -19,10 +19,11 @@ import type { AppData, CoachMember } from '../../types'
 
 /** Owners manage their studio here; a free coach sees the upgrade offer; studio coaches never come here. */
 export function StudioPage() {
-  const { data } = useData()
+  const { data, status } = useData()
   const { session } = useSession()
   // Right after upgrading, the new owner session arrives before the reloaded studio data.
-  if (session?.role === 'owner') return selectIsStudio(data) ? <ManageStudio /> : <PageLoading />
+  if (session?.role === 'owner' && !selectIsStudio(data) && status === 'loading') return <PageLoading />
+  if (session?.role === 'owner' && selectIsStudio(data)) return <ManageStudio />
   if (session?.role === 'coach' && !selectIsStudio(data)) return <UpgradeToStudio />
   return <Navigate to="/coach" replace />
 }
@@ -71,9 +72,10 @@ function UpgradeToStudio() {
         </ul>
         <form onSubmit={upgrade} className="mt-5 space-y-3 border-t border-line pt-5">
           <TextInput label="工作室名稱" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
-          <Button type="submit" icon={Building2} className="h-11 w-full md:h-10" disabled={busy}>
+          <Button type="submit" icon={Building2} className="h-11 w-full md:h-10" disabled={busy || !isApiMode}>
             {busy ? '處理中…' : '升級為工作室'}
           </Button>
+          {!isApiMode && <p className="text-center text-xs text-ink-500">示範模式無法升級。可從「切換示範身分」改看「經營者」，體驗工作室的功能。</p>}
         </form>
       </Card>
     </div>

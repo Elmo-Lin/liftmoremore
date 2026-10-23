@@ -256,4 +256,8 @@ export interface DemoSession {
   token?: string
   /** API mode only: signed-in user's display name. */
   name?: string
+  /** Offline demo only: acting as this studio coach, who sees only their own students. */
+  coachId?: ID
+  /** Offline demo only: which demo workspace (studio / solo / self) this identity lives in. */
+  space?: 'studio' | 'solo' | 'self'
 }

@@ -5,6 +5,9 @@ export const STORAGE_KEYS = {
   session: `${BRAND.storagePrefix}:session:v1`,
 } as const
 
+/** Offline demo: each demo workspace keeps its own data (the studio uses the original key). */
+export const dataKey = (space?: 'studio' | 'solo' | 'self') => (!space || space === 'studio' ? STORAGE_KEYS.data : `${BRAND.storagePrefix}:data:${space}:v1`)
+
 export function readJSON<T>(key: string): T | null {
   try {
     const raw = localStorage.getItem(key)

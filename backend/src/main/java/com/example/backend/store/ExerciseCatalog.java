@@ -4,13 +4,16 @@ import com.example.backend.domain.Exercise;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
-/** Seeds the built-in exercise catalog (kept in sync with frontend/src/data/exercises.ts). */
+/**
+ * The built-in exercise catalog (kept in sync with frontend/src/data/exercises.ts), seeded into
+ * Firestore on first use. Not at startup: on Cloud Run the instance counts as started once the
+ * port is open, and with request-based CPU a startup Firestore call can starve, time out and kill
+ * the instance.
+ */
 @Component
-public class ExerciseCatalog implements ApplicationRunner {
+public class ExerciseCatalog {
 
     private static final Logger log = LoggerFactory.getLogger(ExerciseCatalog.class);
 
@@ -42,17 +45,14 @@ public class ExerciseCatalog implements ApplicationRunner {
         this.db = db;
     }
 
-    /** All exercises (catalog is small; read fully). */
+    /** All exercises (catalog is small; read fully). Seeds the built-in ones if there are none yet. */
     public List<Exercise> all() {
-        return db.list(db.fs.collection(Db.EXERCISES), Exercise.class);
-    }
-
-    @Override
-    public void run(ApplicationArguments args) {
-        if (!Db.await(db.fs.collection(Db.EXERCISES).limit(1).get()).isEmpty()) return;
+        List<Exercise> stored = db.list(db.fs.collection(Db.EXERCISES), Exercise.class);
+        if (!stored.isEmpty()) return stored;
         var batch = db.fs.batch();
         for (Exercise e : BUILT_IN) batch.set(db.doc(Db.EXERCISES, e.id), db.encode(e));
         Db.await(batch.commit());
         log.info("Seeded {} built-in exercises", BUILT_IN.size());
+        return BUILT_IN;
     }
 }

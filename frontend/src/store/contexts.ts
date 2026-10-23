@@ -6,6 +6,8 @@ export type SyncStatus = 'local' | 'loading' | 'ready' | 'error'
 
 export interface DataContextValue {
   data: AppData
+  /** Offline demo: the whole workspace even while acting as a studio coach (for the identity switcher). */
+  everything: AppData
   actions: DataActions
   /** 'local' = offline demo (localStorage); otherwise the backend connection state. */
   status: SyncStatus

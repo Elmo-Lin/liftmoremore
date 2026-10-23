@@ -6,7 +6,9 @@ import type {
   Appointment,
   Coach,
   CoachStudentRelationship,
+  DemoSession,
   ExerciseLog,
+  ID,
   ProgressMetric,
   SessionPackage,
   SessionTransaction,
@@ -23,7 +25,6 @@ export const SCHEMA_VERSION = 1
 export const COACH_ID = 'coach_lin'
 export const DEFAULT_DEMO_STUDENT_ID = 'stu_01'
 /** The demo is a studio: Stone owns it, and Mia teaches the students below. */
-export const DEMO_COACH_ROLE = 'owner' as const
 const MIA_ID = 'coach_mia'
 const MIA_STUDENTS = new Set(['stu_03', 'stu_05', 'stu_07', 'stu_11'])
 const teacherOf = (studentId: string) => (MIA_STUDENTS.has(studentId) ? MIA_ID : COACH_ID)
@@ -320,6 +321,141 @@ function parseReps(reps: string, rand: () => number) {
 }
 
 const roundTo = (n: number, inc: number) => Math.max(inc, Math.round(n / inc) * inc)
+
+// ---------------------------------------------------------------------------
+// Offline demo: three separate workspaces, like three real accounts would have
+// ---------------------------------------------------------------------------
+
+/** studio: Action Gym (owner Stone, coach Mia). solo: free coach Kai. self: self-tracker Ruby. */
+export type DemoSpace = 'studio' | 'solo' | 'self'
+
+export type DemoPersona = 'owner' | 'studioCoach' | 'studioStudent' | 'soloCoach' | 'soloStudent' | 'self'
+
+const SOLO_COACH_ID = 'coach_kai'
+const SELF_ID = 'self_ruby'
+/** Studio students reused (renamed) for the free coach's workspace. */
+const SOLO_STUDENTS: Record<string, [name: string, email: string]> = {
+  stu_01: ['Nina Lo', 'nina.lo@example.com'],
+  stu_02: ['Oscar Ho', 'oscar.ho@example.com'],
+  stu_04: ['Peter Kuo', 'peter.kuo@example.com'],
+  stu_06: ['Sam Yeh', 'sam.yeh@example.com'],
+  stu_08: ['Hank Lu', 'hank.lu@example.com'],
+}
+/** Whose training history the self-tracker gets. */
+const SELF_SOURCE = 'stu_12'
+
+/** Who each demo persona is, grouped by workspace (used by the login page and the switcher). */
+export const DEMO_PERSONAS: { space: DemoSpace; group: string; personas: { id: DemoPersona; title: string; who: string }[] }[] = [
+  {
+    space: 'studio',
+    group: '工作室・Action Gym',
+    personas: [
+      { id: 'owner', title: '經營者', who: 'Stone・看整個工作室、管理教練' },
+      { id: 'studioCoach', title: '工作室教練', who: 'Mia Chou・只看到自己的學員' },
+      { id: 'studioStudent', title: '工作室教練的學員', who: 'Grace Lee・Mia 的學員' },
+    ],
+  },
+  {
+    space: 'solo',
+    group: '自由教練',
+    personas: [
+      { id: 'soloCoach', title: '自由教練', who: 'Kai Lin・一個人帶學員' },
+      { id: 'soloStudent', title: '自由教練的學員', who: 'Nina Lo・Kai 的學員' },
+    ],
+  },
+  { space: 'self', group: '一般用戶', personas: [{ id: 'self', title: '自主訓練', who: 'Ruby Wang・自己記錄訓練' }] },
+]
+
+export function demoSession(persona: DemoPersona): DemoSession {
+  switch (persona) {
+    case 'owner':
+      return { role: 'owner', studentId: DEFAULT_DEMO_STUDENT_ID, space: 'studio' }
+    case 'studioCoach':
+      return { role: 'coach', studentId: DEFAULT_DEMO_STUDENT_ID, coachId: MIA_ID, space: 'studio' }
+    case 'studioStudent':
+      return { role: 'student', studentId: 'stu_03', space: 'studio' }
+    case 'soloCoach':
+      return { role: 'coach', studentId: 'stu_01', space: 'solo' }
+    case 'soloStudent':
+      return { role: 'student', studentId: 'stu_01', space: 'solo' }
+    case 'self':
+      return { role: 'self', studentId: SELF_ID, space: 'self' }
+  }
+}
+
+export const demoHome = (p: DemoPersona) => (p === 'studioStudent' || p === 'soloStudent' || p === 'self' ? '/student' : '/coach')
+
+export const demoPersonaTitle = (p: DemoPersona) => DEMO_PERSONAS.flatMap((g) => g.personas).find((x) => x.id === p)?.title ?? ''
+
+/** Which persona a demo session is (for the switcher's current selection). */
+export function demoPersonaOf(s: DemoSession | null): DemoPersona {
+  if (s?.space === 'self' || s?.role === 'self') return 'self'
+  if (s?.space === 'solo') return s.role === 'student' ? 'soloStudent' : 'soloCoach'
+  if (s?.role === 'student') return 'studioStudent'
+  return s?.coachId ? 'studioCoach' : 'owner'
+}
+
+export const demoSpaceOf = (d: AppData): DemoSpace => (d.studio?.kind === 'solo' ? 'solo' : d.studio?.kind === 'self' ? 'self' : 'studio')
+
+export function generateDemoData(space: DemoSpace, nowDate = new Date()): AppData {
+  const studio = generateMockData(nowDate)
+  return space === 'solo' ? soloFrom(studio) : space === 'self' ? selfFrom(studio) : studio
+}
+
+/** Keep only these students and everything that belongs to them. */
+function onlyStudents(d: AppData, keep: (id: ID) => boolean): AppData {
+  const own = <T extends { studentId: ID }>(list: T[]) => list.filter((x) => keep(x.studentId))
+  return {
+    ...d,
+    students: d.students.filter((s) => keep(s.id)),
+    relationships: own(d.relationships),
+    workouts: own(d.workouts),
+    packages: own(d.packages),
+    transactions: own(d.transactions),
+    metrics: own(d.metrics),
+    appointments: own(d.appointments),
+  }
+}
+
+/** A free coach's workspace: five of the studio's students, renamed, all taught by Kai at a commercial gym. */
+function soloFrom(studio: AppData): AppData {
+  const d = onlyStudents(studio, (id) => id in SOLO_STUDENTS)
+  const coach: Coach = { ...d.coach, id: SOLO_COACH_ID, name: 'Kai Lin', email: 'kai.lin@example.com', phone: '0911-222-333', title: '私人教練', studio: '' }
+  const location = '健身工廠 信義店'
+  return {
+    ...d,
+    coach,
+    students: d.students.map((s) => ({ ...s, name: SOLO_STUDENTS[s.id][0], email: SOLO_STUDENTS[s.id][1] })),
+    relationships: d.relationships.map((r) => ({ ...r, coachId: SOLO_COACH_ID })),
+    plans: d.plans.map((p) => ({ ...p, coachId: SOLO_COACH_ID })),
+    workouts: d.workouts.map((w) => (w.coachId ? { ...w, coachId: SOLO_COACH_ID } : w)),
+    packages: d.packages.map((p) => ({ ...p, coachId: SOLO_COACH_ID })),
+    appointments: d.appointments.map((a) => ({ ...a, coachId: SOLO_COACH_ID, location })),
+    studio: { id: SOLO_COACH_ID, kind: 'solo', ownerId: SOLO_COACH_ID, coaches: [{ id: SOLO_COACH_ID, role: 'coach', name: coach.name, email: coach.email, title: coach.title, status: 'active', createdAt: coach.createdAt }] },
+  }
+}
+
+/** A self-tracker: one person's history, all self-logged; no coach, sessions, bookings or plans. */
+function selfFrom(studio: AppData): AppData {
+  const d = onlyStudents(studio, (id) => id === SELF_SOURCE)
+  const src = d.students[0]
+  const rename = <T extends { studentId: ID }>(x: T) => ({ ...x, studentId: SELF_ID })
+  return {
+    ...d,
+    coach: { ...d.coach, id: SELF_ID, name: 'Ruby Wang', email: 'ruby.wang@example.com', phone: undefined, title: '', studio: '' },
+    students: [{ ...src, id: SELF_ID, name: 'Ruby Wang', email: 'ruby.wang@example.com', gender: 'female', activePlanId: undefined, coachNotes: '' }],
+    relationships: [{ id: `rel_${SELF_ID}`, coachId: SELF_ID, studentId: SELF_ID, status: 'active', startedAt: src.joinedAt }],
+    plans: [],
+    workouts: d.workouts
+      .filter((w) => w.status === 'completed')
+      .map((w) => ({ ...rename(w), type: 'independent' as const, createdBy: 'student' as const, coachId: undefined, planId: undefined, trainingDayId: undefined })),
+    packages: [],
+    transactions: [],
+    metrics: d.metrics.map(rename),
+    appointments: [],
+    studio: { id: SELF_ID, kind: 'self', ownerId: SELF_ID, coaches: [] },
+  }
+}
 
 export function generateMockData(nowDate = new Date()): AppData {
   const rand = mulberry32(20261020)
