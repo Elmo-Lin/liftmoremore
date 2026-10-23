@@ -95,7 +95,7 @@ export function EmptyState({ icon: Icon, title, description, action, compact }: 
   )
 }
 
-/** `to`: the card links to the page with the details behind the number. */
+/** `to`: the card links to the details behind the number — a route, or `#id` to scroll to a section on this page. */
 export function Stat({ label, value, unit, sub, icon: Icon, tone = 'default', to }: { label: string; value: ReactNode; unit?: string; sub?: ReactNode; icon?: LucideIcon; tone?: 'default' | 'warn'; to?: string }) {
   const body = (
     <>
@@ -111,8 +111,26 @@ export function Stat({ label, value, unit, sub, icon: Icon, tone = 'default', to
     </>
   )
   if (!to) return <Card className="px-4 py-3.5 md:px-5 md:py-4">{body}</Card>
+  const cls = 'block rounded-xl bg-surface px-4 py-3.5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_0_0_0.5px_rgba(0,0,0,0.04)] transition-colors hover:bg-raised active:bg-subtle md:px-5 md:py-4'
+  if (to.startsWith('#')) {
+    return (
+      <a
+        href={to}
+        className={cls}
+        onClick={(e) => {
+          e.preventDefault()
+          const target = document.getElementById(to.slice(1))
+          target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          // A brief outline, so the tap visibly lands even when the section is already on screen.
+          target?.animate([{ boxShadow: '0 0 0 3px var(--color-accent-500)' }, { boxShadow: '0 0 0 3px transparent' }], { duration: 1200, easing: 'ease-out' })
+        }}
+      >
+        {body}
+      </a>
+    )
+  }
   return (
-    <Link to={to} className="block rounded-xl bg-surface px-4 py-3.5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_0_0_0.5px_rgba(0,0,0,0.04)] transition-colors hover:bg-raised active:bg-subtle md:px-5 md:py-4">
+    <Link to={to} className={cls}>
       {body}
     </Link>
   )

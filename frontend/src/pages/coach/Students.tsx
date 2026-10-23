@@ -82,7 +82,8 @@ export function StudentsPage() {
             className={`${inputClass} h-10 pl-9`}
           />
         </div>
-        <div className="flex items-center gap-2">
+        {/* Phones: status on one row, the dropdowns sharing the next; one row from sm up. */}
+        <div className="flex flex-wrap items-center gap-2">
           <Segmented
             label="狀態篩選"
             value={status}
@@ -93,22 +94,24 @@ export function StudentsPage() {
               { value: 'all', label: '全部' },
             ]}
           />
-          {showCoach && (
-            <ToolbarSelect label="教練" value={coachFilter} onChange={(e) => setCoachFilter(e.target.value)}>
-              <option value="all">所有教練</option>
-              {data.studio!.coaches.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                  {c.status === 'inactive' ? '（已停用）' : ''}
-                </option>
-              ))}
+          <div className="flex w-full gap-2 sm:w-auto">
+            {showCoach && (
+              <ToolbarSelect label="教練" value={coachFilter} onChange={(e) => setCoachFilter(e.target.value)} className="h-10 min-w-0 flex-1 sm:h-9 sm:flex-none">
+                <option value="all">所有教練</option>
+                {data.studio!.coaches.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.status === 'inactive' ? '（已停用）' : ''}
+                  </option>
+                ))}
+              </ToolbarSelect>
+            )}
+            <ToolbarSelect label="排序" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="h-10 min-w-0 flex-1 sm:h-9 sm:flex-none">
+              <option value="recent">最近訓練</option>
+              <option value="balance">剩餘堂數</option>
+              <option value="name">姓名</option>
             </ToolbarSelect>
-          )}
-          <ToolbarSelect label="排序" value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
-            <option value="recent">最近訓練</option>
-            <option value="balance">剩餘堂數</option>
-            <option value="name">姓名</option>
-          </ToolbarSelect>
+          </div>
         </div>
       </div>
 

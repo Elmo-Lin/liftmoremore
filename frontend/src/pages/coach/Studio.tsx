@@ -114,13 +114,13 @@ function ManageStudio() {
       {used >= seats && <p className="-mt-2 mb-4 text-[13px] text-ink-500">名額已滿。停用一位教練即可釋出名額。</p>}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="教練" value={active.length} unit="位" icon={Users} sub={`含經營者・名額 ${seats} 位`} />
-        <Stat label="進行中學員" value={totals.students} unit="位" icon={Users} sub="全工作室" />
-        <Stat label="本月完成課程" value={totals.sessions} unit="堂" icon={Check} sub="教練課，不含自主訓練" />
-        <Stat label="堂數偏低" value={totals.low} unit="位" icon={Ticket} tone={totals.low ? 'warn' : 'default'} sub={`剩餘 ${LOW_BALANCE_THRESHOLD} 堂以下`} />
+        <Stat label="教練" value={active.length} unit="位" icon={Users} sub={`含經營者・名額 ${seats} 位`} to="#coaches" />
+        <Stat label="進行中學員" value={totals.students} unit="位" icon={Users} sub="全工作室" to="/coach/students" />
+        <Stat label="本月完成課程" value={totals.sessions} unit="堂" icon={Check} sub="教練課，不含自主訓練" to="/coach/analytics" />
+        <Stat label="堂數偏低" value={totals.low} unit="位" icon={Ticket} tone={totals.low ? 'warn' : 'default'} sub={`剩餘 ${LOW_BALANCE_THRESHOLD} 堂以下`} to="/coach/students?sort=balance" />
       </div>
 
-      <Card className="mt-4">
+      <Card id="coaches" className="mt-4 scroll-mt-16 md:scroll-mt-6">
         <CardHeader title="教練" description="停用教練前，會請你選擇由誰接手他的學員" />
         <ul className="divide-y divide-line border-t border-line">
           {studio.coaches.map((c) => {
