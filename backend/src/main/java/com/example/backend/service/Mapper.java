@@ -66,7 +66,7 @@ public final class Mapper {
                         l.sets.stream().map(s -> new SetLogDto(s.id, s.weightKg, s.reps, s.rpe, s.completed)).toList(), l.notes))
                 .toList();
         return new WorkoutDto(w.id, w.studentId, w.coachId, w.type, w.createdBy, w.status, w.title, w.planId, w.trainingDayId,
-                w.planIds == null || w.planIds.isEmpty() ? null : w.planIds, w.startedAt, w.completedAt, w.updatedAt, logs, w.notes);
+                w.startedAt, w.completedAt, w.updatedAt, logs, w.notes);
     }
 
     public static PackageDto pkg(SessionPackage p) {

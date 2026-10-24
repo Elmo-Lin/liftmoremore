@@ -100,7 +100,6 @@ public class WorkoutService {
             w.title = in.title() == null || in.title().isBlank() ? "自由訓練" : in.title().trim();
             w.planId = in.planId();
             w.trainingDayId = in.trainingDayId();
-            w.planIds = in.planIds() == null || in.planIds().isEmpty() ? null : in.planIds();
             w.startedAt = in.startedAt();
             w.completedAt = completed ? (in.completedAt() != null ? in.completedAt() : now) : null;
             w.updatedAt = now;

@@ -68,9 +68,8 @@ export function StudentDetailPage() {
 
   const balance = selectBalance(data, student.id)
   const workouts = selectCompleted(data, student.id)
-  const plan = selectPlan(data, student.activePlanId)
-  const day = plan ? planMenu(plan) : undefined
-  const startHref = plan && day ? `/coach/workouts/new?student=${student.id}&plan=${plan.id}` : `/coach/workouts/new?student=${student.id}`
+  // Opens the start screen with the assigned plan preselected, so the coach can still pick another.
+  const startHref = `/coach/workouts/new?student=${student.id}`
   const pending = workouts.filter((w) => w.type === 'coached' && !deductionFor(w.id, data.transactions)).length
 
   const toggleStatus = () => {

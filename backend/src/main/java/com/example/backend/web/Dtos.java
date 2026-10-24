@@ -118,8 +118,6 @@ public final class Dtos {
             @Size(max = 60) String title,
             String planId,
             String trainingDayId,
-            /** Several plans combined into one workout; planId is the first. */
-            @Size(max = 10) List<String> planIds,
             @NotNull Instant startedAt,
             Instant completedAt,
             Instant updatedAt,

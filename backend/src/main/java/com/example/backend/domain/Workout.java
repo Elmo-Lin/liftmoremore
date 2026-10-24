@@ -18,8 +18,6 @@ public class Workout {
     public String title;
     public String planId;
     public String trainingDayId;
-    /** Started from several plans combined (planId is the first of them). */
-    public List<String> planIds;
     public Instant startedAt;
     public Instant completedAt;
     public Instant updatedAt;

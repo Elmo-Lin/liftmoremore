@@ -29,7 +29,7 @@ import { DeleteDraftButton } from './DraftsCard'
 import { ExerciseCard, type SetSuggestion } from './ExerciseCard'
 import { ExercisePicker } from './ExercisePicker'
 
-/** Plans shown as cards when starting a workout; the rest can be added from a dropdown. */
+/** Plans shown as cards when starting a workout; the rest are in a dropdown. */
 const PLAN_CARDS = 6
 
 function emptyWorkout(studentId: ID, mode: Role, coachId: ID): WorkoutSession {
@@ -105,8 +105,8 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
   })
 
   const [lastSaved, setLastSaved] = useState<string | null>(null)
-  /** Plans picked to start from (coaches may combine several); null = the student's assigned plan. */
-  const [chosenPlans, setChosenPlans] = useState<ID[] | null>(null)
+  /** Plan picked to start from; null = the student's assigned plan. */
+  const [chosenPlan, setChosenPlan] = useState<ID | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [confirmFinish, setConfirmFinish] = useState<number | null>(null)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
@@ -126,19 +126,10 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
 
   const student = selectStudent(data, workout?.studentId ?? studentId)
   const balance = student ? selectBalance(data, student.id) : null
-  const planNames = [...new Set([workout?.planId, ...(workout?.planIds ?? [])])]
-    .map((id) => (id ? selectPlan(data, id)?.name : undefined))
-    .filter(Boolean)
-    .join(' + ')
-  /** Targets come from the plan each exercise was taken from (the first that has it, when plans were combined). */
-  const rxFor = (exerciseId: ID): ExercisePrescription | undefined => {
-    for (const id of new Set([workout?.planId, ...(workout?.planIds ?? [])])) {
-      const p = id ? selectPlan(data, id) : undefined
-      const rx = p && planMenu(p).exercises.find((r) => r.exerciseId === exerciseId)
-      if (rx) return rx
-    }
-    return undefined
-  }
+  const plan = selectPlan(data, workout?.planId)
+  const day = plan ? planMenu(plan) : undefined
+
+  const rxFor = (exerciseId: ID): ExercisePrescription | undefined => day?.exercises.find((r) => r.exerciseId === exerciseId)
 
   const lastByExercise = useMemo(() => {
     const m = new Map<ID, { log: ExerciseLog; date: string }>()
@@ -172,28 +163,11 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
     setParams({}, { replace: true })
   }
 
-  /**
-   * A plan is one menu: its exercises, sets and target weights come in, titled after the plan.
-   * Several plans combine in the order chosen; an exercise in more than one comes in once.
-   */
-  const startFromPlans = (plans: TrainingPlan[]) => {
+  /** A plan is one menu: its exercises, sets and target weights come in, titled after the plan. */
+  const startFromPlan = (p: TrainingPlan) => {
     if (!student) return notify('請先選擇學員', 'error')
-    if (!plans.length) return
-    const menus = plans.map(planMenu)
-    const seen = new Set<ID>()
-    const exercises = menus.flatMap((m) => m.exercises).filter((rx) => {
-      if (seen.has(rx.exerciseId)) return false
-      seen.add(rx.exerciseId)
-      return true
-    })
-    start({
-      ...emptyWorkout(student.id, mode, data.coach.id),
-      title: plans.map((p) => p.name).join(' + ').slice(0, 60),
-      planId: plans[0].id,
-      planIds: plans.length > 1 ? plans.map((p) => p.id) : undefined,
-      trainingDayId: menus[0].id,
-      exercises: logsFromDay({ ...menus[0], exercises }),
-    })
+    const menu = planMenu(p)
+    start({ ...emptyWorkout(student.id, mode, data.coach.id), title: p.name, planId: p.id, trainingDayId: menu.id, exercises: logsFromDay(menu) })
   }
 
   const lastWorkout = student ? selectCompleted(data, student.id)[0] : undefined
@@ -260,9 +234,7 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
         : activePlan
           ? [activePlan]
           : []
-    const selectedPlanIds = chosenPlans ?? (mode === 'coach' && activePlan ? [activePlan.id] : [])
-    const selectedPlans = selectedPlanIds.map((id) => data.plans.find((p) => p.id === id)).filter((p): p is TrainingPlan => !!p)
-    const togglePlan = (id: ID) => setChosenPlans(selectedPlanIds.includes(id) ? selectedPlanIds.filter((x) => x !== id) : [...selectedPlanIds, id])
+    const selectedPlan = mode === 'coach' ? startablePlans.find((p) => p.id === (chosenPlan ?? activePlan?.id)) : undefined
     return (
       <div className="space-y-5">
         {drafts.length > 0 && (
@@ -314,7 +286,7 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
               value={studentId}
               onChange={(e) => {
                 setStudentId(e.target.value)
-                setChosenPlans(null)
+                setChosenPlan(null)
               }}
               className="h-12 md:h-10"
             >
@@ -343,21 +315,19 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
             <div className="mt-5 space-y-5">
               {startablePlans.length ? (
                 <div>
-                  <p className="mb-2 text-[13px] font-medium text-ink-700">
-                    從計畫開始
-                    {mode === 'coach' && <span className="ml-1.5 font-normal text-ink-500">可以多選，合併成一次訓練</span>}
-                  </p>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <p className="mb-2 text-[13px] font-medium text-ink-700">從計畫開始</p>
+                  <div role={mode === 'coach' ? 'radiogroup' : undefined} aria-label="從計畫開始" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {startablePlans.slice(0, PLAN_CARDS).map((p) => {
                       const menu = planMenu(p)
-                      const picked = selectedPlanIds.includes(p.id)
+                      const picked = selectedPlan?.id === p.id
                       return (
                         <button
                           key={p.id}
                           type="button"
-                          aria-pressed={mode === 'coach' ? picked : undefined}
-                          // Students have one plan: a tap starts it. Coaches pick one or more, then start.
-                          onClick={() => (mode === 'coach' ? togglePlan(p.id) : startFromPlans([p]))}
+                          role={mode === 'coach' ? 'radio' : undefined}
+                          aria-checked={mode === 'coach' ? picked : undefined}
+                          // Students have one plan: a tap starts it. Coaches pick one, then start.
+                          onClick={() => (mode === 'coach' ? setChosenPlan(p.id) : startFromPlan(p))}
                           className={`flex items-center gap-3 rounded-xl border px-4 py-3.5 text-left transition-colors ${
                             picked ? 'border-accent-600 bg-accent-50' : 'border-line-strong hover:border-accent-600 hover:bg-accent-50'
                           }`}
@@ -388,29 +358,23 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
                     <>
                       {startablePlans.length > PLAN_CARDS && (
                         <select
-                          aria-label="加入其他計畫"
+                          aria-label="其他計畫"
                           className={`${inputClass} mt-2 h-11 sm:max-w-xs`}
-                          value=""
-                          onChange={(e) => e.target.value && togglePlan(e.target.value)}
+                          value={startablePlans.slice(PLAN_CARDS).some((p) => p.id === selectedPlan?.id) ? selectedPlan?.id : ''}
+                          onChange={(e) => e.target.value && setChosenPlan(e.target.value)}
                         >
-                          <option value="">加入其他計畫（{startablePlans.length - PLAN_CARDS}）…</option>
+                          <option value="">其他計畫（{startablePlans.length - PLAN_CARDS}）…</option>
                           {startablePlans.slice(PLAN_CARDS).map((p) => (
                             <option key={p.id} value={p.id}>
-                              {selectedPlanIds.includes(p.id) ? '✓ ' : ''}
                               {p.name}
                             </option>
                           ))}
                         </select>
                       )}
-                      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <Button className="h-12 sm:h-11" disabled={!selectedPlans.length} onClick={() => startFromPlans(selectedPlans)}>
-                          {selectedPlans.length > 1 ? `合併 ${selectedPlans.length} 個計畫開始` : selectedPlans.length ? `開始「${selectedPlans[0].name}」` : '請先選擇計畫'}
+                      <div className="mt-3">
+                        <Button className="h-12 w-full sm:h-11 sm:w-auto" disabled={!selectedPlan} onClick={() => selectedPlan && startFromPlan(selectedPlan)}>
+                          {selectedPlan ? `開始「${selectedPlan.name}」` : '請先選擇計畫'}
                         </Button>
-                        {selectedPlans.length > 1 && (
-                          <p className="text-xs text-ink-500">
-                            {selectedPlans.map((p) => p.name).join(' + ')}・共 {new Set(selectedPlans.flatMap((p) => planMenu(p).exercises.map((r) => r.exerciseId))).size} 個動作
-                          </p>
-                        )}
                       </div>
                     </>
                   )}
@@ -489,7 +453,7 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
                 <Clock className="size-3.5" />
                 {formatTime(workout.startedAt)} 開始・{elapsed ?? 0} 分鐘
               </span>
-              {planNames && <span>{planNames}</span>}
+              {plan && <span>{plan.name}</span>}
               {mode === 'coach' && balance && (
                 <span className={balance.remaining <= LOW_BALANCE_THRESHOLD ? 'text-warn-600' : ''}>剩餘 {balance.remaining} 堂</span>
               )}

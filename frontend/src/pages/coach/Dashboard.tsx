@@ -131,7 +131,7 @@ export function CoachDashboardPage() {
                 const day = plan ? planMenu(plan) : undefined
                 const done = todayDone.some((w) => w.studentId === s.id)
                 const bal = selectBalance(data, s.id)
-                const href = plan && day ? `/coach/workouts/new?student=${s.id}&plan=${plan.id}` : `/coach/workouts/new?student=${s.id}`
+                const href = `/coach/workouts/new?student=${s.id}`
                 return (
                   <li key={a.id} className="flex items-center gap-3 px-5 py-3">
                     <span className="tabular w-12 shrink-0 text-sm font-semibold text-ink-800">{formatTime(a.startAt)}</span>
