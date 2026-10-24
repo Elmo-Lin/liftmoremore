@@ -10,3 +10,6 @@ export function planMenu(plan: TrainingPlan): TrainingDay {
 
 /** The plan with its menu as its only day, which is how plans are edited and saved. */
 export const asMenuPlan = (plan: TrainingPlan): TrainingPlan => ({ ...plan, days: [planMenu(plan)] })
+
+/** Where plans are listed: coaches manage them under /coach, self-trackers keep their own under /student. */
+export const plansPath = (isSelf: boolean) => (isSelf ? '/student/plans' : '/coach/plans')

@@ -58,9 +58,6 @@ export function CoachDashboardPage() {
             <ButtonLink to="/coach/plans/new" variant="secondary" icon={ClipboardPlus}>
               建立計畫
             </ButtonLink>
-            <ButtonLink to="/coach/workouts/new" icon={Dumbbell} variant="accent">
-              開始訓練
-            </ButtonLink>
           </>
         }
       />

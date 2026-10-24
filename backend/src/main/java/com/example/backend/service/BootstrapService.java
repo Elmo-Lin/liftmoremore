@@ -30,7 +30,7 @@ import org.springframework.stereotype.Service;
  * One request that returns everything the caller may see, in the frontend's AppData shape.
  * Free coaches and studio owners get the whole workspace; studio coaches get their own students
  * (and the shared plans); students get only their own records, their assigned plan, and never the
- * coach's private notes. Collections are fetched in parallel.
+ * coach's private notes; self-trackers get all of their own plans. Collections are fetched in parallel.
  */
 @Service
 public class BootstrapService {
@@ -64,7 +64,8 @@ public class BootstrapService {
         ApiFuture<QuerySnapshot> transactions = scoped(coachId, Db.TRANSACTIONS, user, "studentId");
         ApiFuture<QuerySnapshot> metrics = scoped(coachId, Db.METRICS, user, "studentId");
         ApiFuture<QuerySnapshot> appointments = scoped(coachId, Db.APPOINTMENTS, user, "studentId");
-        ApiFuture<QuerySnapshot> plans = asCoach ? db.coachCol(coachId, Db.PLANS).get() : null;
+        boolean allPlans = asCoach || user.isSelf();
+        ApiFuture<QuerySnapshot> plans = allPlans ? db.coachCol(coachId, Db.PLANS).get() : null;
 
         List<Student> all = decode(students, Student.class);
         List<Student> roster = all.stream().filter(s -> access.canSee(user, s)).toList();
@@ -72,7 +73,7 @@ public class BootstrapService {
         Set<String> visible = roster.stream().map(s -> s.id).collect(Collectors.toSet());
         // The profile shown as "the coach": yourself as a coach, your responsible coach as a student.
         CoachDto coach = studios.profile(space, asCoach ? user.userId() : roster.get(0).coach(), asCoach);
-        List<TrainingPlan> planList = asCoach
+        List<TrainingPlan> planList = allPlans
                 ? decode(plans, TrainingPlan.class)
                 : roster.get(0).activePlanId == null ? List.of()
                         : db.get(db.coachDoc(coachId, Db.PLANS, roster.get(0).activePlanId), TrainingPlan.class).stream().toList();

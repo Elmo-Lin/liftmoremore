@@ -13,7 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { Suspense, useEffect, useState } from 'react'
-import { Link, NavLink, Outlet } from 'react-router'
+import { Link, NavLink, Outlet, useLocation } from 'react-router'
 import { BRAND } from '../../config/brand'
 import { homePath } from '../../lib/roles'
 import { useScrollTopIfCurrent } from '../../lib/scroll'
@@ -32,12 +32,14 @@ interface NavItem {
   primary?: boolean
   /** Sidebar only: the phone tab bar holds at most 5 items. */
   desktopOnly?: boolean
+  /** Also highlighted on pages under this path (reached from this section). */
+  alsoActive?: string
 }
 
 const COACH_NAV: NavItem[] = [
   { to: '/coach', label: '總覽', icon: LayoutDashboard, end: true },
-  { to: '/coach/students', label: '學員', icon: Users },
-  { to: '/coach/workouts/new', label: '記錄訓練', short: '記錄', icon: Dumbbell, primary: true },
+  // Workouts are started from a student (their page, today's schedule), so the logger sits under 學員.
+  { to: '/coach/students', label: '學員', icon: Users, alsoActive: '/coach/workouts' },
   { to: '/coach/schedule', label: '課表', icon: CalendarDays },
   { to: '/coach/plans', label: '訓練計畫', short: '計畫', icon: ClipboardList },
   // On phones: from a student's 進步 tab.
@@ -61,6 +63,7 @@ const SELF_BILLING_ITEM: NavItem = { to: '/student/billing', label: '方案與�
 const SELF_NAV: NavItem[] = [
   { to: '/student', label: '首頁', icon: House, end: true },
   { to: '/student/workouts/new', label: '記錄訓練', short: '訓練', icon: Dumbbell, primary: true },
+  { to: '/student/plans', label: '訓練計畫', short: '計畫', icon: ClipboardList },
   { to: '/student/history', label: '訓練紀錄', short: '紀錄', icon: History },
   { to: '/student/progress', label: '進步追蹤', short: '進步', icon: TrendingUp },
 ]
@@ -131,6 +134,8 @@ export function AppShell() {
   const selfNav = [...SELF_NAV, ...(data.billing ? [SELF_BILLING_ITEM] : [])]
   const nav = session?.role === 'self' ? selfNav : session?.role === 'student' ? STUDENT_NAV : coachNav
   const tabBar = nav.filter((item) => !item.desktopOnly)
+  const { pathname } = useLocation()
+  const active = (item: NavItem, isActive: boolean) => isActive || (!!item.alsoActive && pathname.startsWith(item.alsoActive))
 
   return (
     <div className="min-h-dvh md:flex">
@@ -147,13 +152,13 @@ export function AppShell() {
               end={item.end}
               className={({ isActive }) =>
                 `flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[14px] transition-colors ${
-                  isActive ? 'bg-black/[0.07] font-medium text-ink-900' : 'text-ink-800 hover:bg-black/[0.04]'
+                  active(item, isActive) ? 'bg-black/[0.07] font-medium text-ink-900' : 'text-ink-800 hover:bg-black/[0.04]'
                 }`
               }
             >
               {({ isActive }) => (
                 <>
-                  <item.icon className="size-4 text-accent-600" strokeWidth={isActive ? 2.25 : 2} />
+                  <item.icon className="size-4 text-accent-600" strokeWidth={active(item, isActive) ? 2.25 : 2} />
                   {item.label}
                 </>
               )}
@@ -188,13 +193,13 @@ export function AppShell() {
             to={item.to}
             end={item.end}
             className={({ isActive }) =>
-              `flex h-[50px] flex-col items-center justify-center gap-0 text-[10px] font-medium ${isActive ? 'text-accent-600' : 'text-ink-400'}`
+              `flex h-[50px] flex-col items-center justify-center gap-0 text-[10px] font-medium ${active(item, isActive) ? 'text-accent-600' : 'text-ink-400'}`
             }
           >
             {({ isActive }) =>
               <>
                 <span className="inline-flex h-7 items-center">
-                  <item.icon className="size-6" strokeWidth={isActive ? 2.1 : 1.75} />
+                  <item.icon className="size-6" strokeWidth={active(item, isActive) ? 2.1 : 1.75} />
                 </span>
                 {item.short ?? item.label}
               </>

@@ -310,6 +310,18 @@ class ApiIntegrationTests {
         assertThat(call(post("/api/students"), self, Map.of()).status()).isIn(400, 403);
         assertThat(call(get("/api/plans"), self, null).body().size()).isZero();
 
+        // Self-trackers write their own plans (there is no coach to assign them one).
+        Map<String, Object> plan = Map.of("name", "我的上肢", "goal", "strength", "description", "",
+                "days", List.of(Map.of("id", "day_m", "name", "我的上肢", "exercises", List.of(Map.of("id", "rx_1", "exerciseId", "ex_squat", "sets", 3, "reps", "5")))));
+        String planId = "plan_self" + suffix;
+        assertThat(call(put("/api/plans/" + planId), self, plan).status()).isEqualTo(200);
+        assertThat(call(get("/api/plans"), self, null).body().size()).isEqualTo(1);
+        assertThat(call(get("/api/bootstrap"), self, null).body().get("plans").size()).as("all of their plans, not just an assigned one").isEqualTo(1);
+        assertThat(call(post("/api/plans/" + planId + "/duplicate"), self, null).status()).isEqualTo(201);
+        assertThat(call(put("/api/plans/" + planId + "/assignments"), self, Map.of("studentIds", List.of(sid))).status()).isEqualTo(403);
+        assertThat(call(get("/api/plans/" + planId), coach, null).status()).as("stays in their own space").isEqualTo(404);
+        assertThat(call(delete("/api/plans/" + planId), self, null).status()).isEqualTo(204);
+
         String other = createStudent(coach, "jay");
         assertThat(call(get("/api/students/" + other), self, null).status()).as("cannot reach a coach's students").isEqualTo(404);
         assertThat(call(get("/api/students/" + sid), coach, null).status()).as("coach cannot reach a self-tracker").isEqualTo(404);

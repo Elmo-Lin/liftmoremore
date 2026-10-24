@@ -227,9 +227,9 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
     const drafts = selectDrafts(data, fixedStudentId, mode)
     const activeStudents = data.students.filter((s) => s.status === 'active')
     const activePlan = selectPlan(data, student?.activePlanId)
-    // Coaches can start from any plan (the student's assigned one first); students only from theirs.
+    // Coaches can start from any plan (the student's assigned one first), self-trackers from any of their own; students only from theirs.
     const startablePlans =
-      mode === 'coach'
+      mode === 'coach' || isSelf
         ? [...data.plans].sort((x, y) => Number(y.id === activePlan?.id) - Number(x.id === activePlan?.id) || y.updatedAt.localeCompare(x.updatedAt))
         : activePlan
           ? [activePlan]
@@ -339,7 +339,8 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
                               {p.id === activePlan?.id && mode === 'coach' && <Badge tone="accent">已指派</Badge>}
                             </p>
                             <p className="truncate text-xs text-ink-500">
-                              {menu.exercises.length} 個動作・{menu.exercises.map((r) => exMap.get(r.exerciseId)?.name).slice(0, 3).join('、')}
+                              {menu.exercises.length} 個動作
+                              {menu.exercises.length > 0 && `・${menu.exercises.map((r) => exMap.get(r.exerciseId)?.name).slice(0, 3).join('、')}`}
                             </p>
                           </div>
                           {mode === 'coach' && (
@@ -381,7 +382,7 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
                 </div>
               ) : (
                 <p className="rounded-lg bg-canvas px-3 py-2.5 text-[13px] text-ink-500">
-                  {mode === 'coach' ? '還沒有訓練計畫，可以從空白開始，或到「訓練計畫」建立常用的菜單。' : isSelf ? '從上次訓練或空白開始記錄。' : '教練尚未指派計畫給你，可以從空白開始記錄。'}
+                  {mode === 'coach' ? '還沒有訓練計畫，可以從空白開始，或到「訓練計畫」建立常用的菜單。' : isSelf ? '還沒有訓練計畫，可以從空白開始，或到「訓練計畫」建立常用的菜單。' : '教練尚未指派計畫給你，可以從空白開始記錄。'}
                 </p>
               )}
 

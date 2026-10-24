@@ -3,7 +3,7 @@
 // - Coach and Student are distinct user roles. A self-tracker ('self') has no coach:
 //   the backend gives them a one-person space where they are the only student.
 // - Workout sessions always belong to exactly one student.
-// - Training plans are coach-authored; workout logs record who created them.
+// - Training plans are authored by coaches, or by a self-tracker for themselves; workout logs record who created them.
 // - Session balances are NEVER stored; they are derived from a package's
 //   totalSessions plus the sum of its transaction deltas.
 

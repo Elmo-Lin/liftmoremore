@@ -19,7 +19,10 @@ import java.util.List;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 
-/** Plans are coach-authored. Students can only read the plan currently assigned to them. */
+/**
+ * Plans are authored by coaches, and by self-trackers in their own space. Students can only read the plan
+ * currently assigned to them.
+ */
 @Service
 public class PlanService {
 
@@ -34,7 +37,7 @@ public class PlanService {
     }
 
     public List<PlanDto> list(CurrentUser user) {
-        if (user.isStudent()) {
+        if (assignedOnly(user)) {
             Student self = access.student(user, user.userId());
             if (self.activePlanId == null) return List.of();
             return db.get(db.coachDoc(user.coachId(), Db.PLANS, self.activePlanId), TrainingPlan.class).map(Mapper::plan).stream().toList();
@@ -46,14 +49,14 @@ public class PlanService {
     }
 
     public PlanDto get(CurrentUser user, String id) {
-        if (user.isStudent() && !id.equals(access.student(user, user.userId()).activePlanId)) throw ApiException.notFound("找不到計畫");
+        if (assignedOnly(user) && !id.equals(access.student(user, user.userId()).activePlanId)) throw ApiException.notFound("找不到計畫");
         return db.get(db.coachDoc(user.coachId(), Db.PLANS, id), TrainingPlan.class).map(Mapper::plan)
                 .orElseThrow(() -> ApiException.notFound("找不到計畫"));
     }
 
     /** Create or replace a plan (PUT semantics). Days and prescriptions are replaced as a whole. */
     public PlanDto save(CurrentUser user, String id, PlanDto in) {
-        user.requireCoach();
+        requireAuthor(user);
         String planId = Ids.orNew(id, "plan");
         Domain.require(Domain.GOALS, in.goal(), "goal");
         validateExercises(user.coachId(), in.days());
@@ -81,7 +84,7 @@ public class PlanService {
     }
 
     public PlanDto duplicate(CurrentUser user, String id, String newId) {
-        PlanDto src = get(user.requireCoach(), id);
+        PlanDto src = get(requireAuthor(user), id);
         List<TrainingDayDto> days = src.days().stream()
                 .map(d -> new TrainingDayDto(Ids.newId("day"), d.name(), d.focus(),
                         d.exercises().stream()
@@ -93,7 +96,7 @@ public class PlanService {
     }
 
     public void delete(CurrentUser user, String id) {
-        var ref = db.coachDoc(user.requireCoach().coachId(), Db.PLANS, id);
+        var ref = db.coachDoc(requireAuthor(user).coachId(), Db.PLANS, id);
         if (db.get(ref, TrainingPlan.class).isEmpty()) throw ApiException.notFound("找不到計畫");
         WriteBatch batch = db.fs.batch();
         // Unassign; past workouts keep their planId as a historical reference.
@@ -117,6 +120,16 @@ public class PlanService {
             else if (!chosen.contains(s.id) && planId.equals(s.activePlanId)) batch.update(ref, "activePlanId", com.google.cloud.firestore.FieldValue.delete());
         }
         Db.await(batch.commit());
+    }
+
+    /** Students see only their assigned plan; a self-tracker sees all of their own. */
+    private static boolean assignedOnly(CurrentUser user) {
+        return user.isStudent() && !user.isSelf();
+    }
+
+    private static CurrentUser requireAuthor(CurrentUser user) {
+        if (!user.isCoach() && !user.isSelf()) throw ApiException.forbidden("只有教練可以建立或修改計畫");
+        return user;
     }
 
     private void validateExercises(String spaceId, List<TrainingDayDto> days) {

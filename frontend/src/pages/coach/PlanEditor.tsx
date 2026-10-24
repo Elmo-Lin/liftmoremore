@@ -9,9 +9,9 @@ import { Card, EmptyState, PageHeader } from '../../components/ui/Primitives'
 import { ExercisePicker } from '../../components/workout/ExercisePicker'
 import { GOAL_LABEL } from '../../lib/format'
 import { uid } from '../../lib/id'
-import { asMenuPlan } from '../../lib/plans'
+import { asMenuPlan, plansPath } from '../../lib/plans'
 import { useData, useToast } from '../../store/contexts'
-import { selectPlan, useExerciseMap } from '../../store/selectors'
+import { selectPlan, useExerciseMap, useIsSelf } from '../../store/selectors'
 import type { ExercisePrescription, TrainingGoal, TrainingPlan } from '../../types'
 
 function newPlan(coachId: string): TrainingPlan {
@@ -42,12 +42,13 @@ const move = <T,>(arr: T[], i: number, dir: -1 | 1) => {
 export function PlanEditorPage() {
   const { id } = useParams()
   const { data } = useData()
+  const isSelf = useIsSelf()
   const isNew = id === 'new'
   const existing = selectPlan(data, isNew ? undefined : id)
   if (!isNew && !existing) {
     return (
       <Card>
-        <EmptyState icon={ClipboardX} title="找不到此計畫" description="計畫可能已被刪除。" action={<ButtonLink to="/coach/plans">回到計畫列表</ButtonLink>} />
+        <EmptyState icon={ClipboardX} title="找不到此計畫" description="計畫可能已被刪除。" action={<ButtonLink to={plansPath(isSelf)}>回到計畫列表</ButtonLink>} />
       </Card>
     )
   }
@@ -59,6 +60,9 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
   const notify = useToast()
   const navigate = useNavigate()
   const exMap = useExerciseMap()
+  // Self-trackers write plans for themselves: nobody to assign them to.
+  const isSelf = useIsSelf()
+  const listPath = plansPath(isSelf)
   const [plan, setPlan] = useState(initial)
   const [dirty, setDirty] = useState(isNew)
   const [picking, setPicking] = useState(false)
@@ -89,7 +93,7 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
     }
     setDirty(false)
     notify(isNew ? '計畫已建立' : '計畫已儲存')
-    if (isNew) navigate(`/coach/plans/${res.value.id}`, { replace: true })
+    if (isNew) navigate(`${listPath}/${res.value.id}`, { replace: true })
     return res.value
   }
 
@@ -102,7 +106,7 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
         back={
           <button
             type="button"
-            onClick={() => (dirty ? setLeaving(true) : navigate('/coach/plans'))}
+            onClick={() => (dirty ? setLeaving(true) : navigate(listPath))}
             className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-900"
           >
             <ArrowLeft className="size-4" />
@@ -110,10 +114,16 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
           </button>
         }
         title={isNew ? '建立計畫' : '編輯計畫'}
-        description={savedOnce ? `${assignedCount} 位學員使用中・修改會套用到之後的訓練，過去紀錄不受影響` : '儲存後即可指派給學員'}
+        description={
+          isSelf
+            ? '修改會套用到之後的訓練，過去紀錄不受影響'
+            : savedOnce
+              ? `${assignedCount} 位學員使用中・修改會套用到之後的訓練，過去紀錄不受影響`
+              : '儲存後即可指派給學員'
+        }
         actions={
           <>
-            {savedOnce && (
+            {savedOnce && !isSelf && (
               <Button variant="secondary" icon={UserPlus} onClick={() => (dirty ? notify('請先儲存變更再指派', 'info') : setAssigning(true))}>
                 指派學員
               </Button>
@@ -278,14 +288,14 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
             <Button variant="ghost" className="h-11 md:mr-auto md:h-10" onClick={() => setLeaving(false)}>
               繼續編輯
             </Button>
-            <Button variant="secondary" className="h-11 md:h-10" onClick={() => navigate('/coach/plans')}>
+            <Button variant="secondary" className="h-11 md:h-10" onClick={() => navigate(listPath)}>
               不儲存離開
             </Button>
             <Button
               className="h-11 md:h-10"
               onClick={() => {
                 setLeaving(false)
-                if (save()) navigate('/coach/plans')
+                if (save()) navigate(listPath)
               }}
             >
               儲存並離開

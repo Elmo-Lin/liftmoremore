@@ -6,6 +6,7 @@ import { DemoPage, ForgotPasswordPage, LoginPage, ResetPasswordPage } from './pa
 import { NotFoundPage } from './pages/NotFound'
 import { HomePage } from './pages/public/Home'
 import { useData, useSession } from './store/contexts'
+import { useIsSelf } from './store/selectors'
 import { billingPath } from './lib/billing'
 import { homePath, isCoachRole } from './lib/roles'
 
@@ -39,6 +40,11 @@ function RequireRole({ role, children }: { role: 'coach' | 'student'; children: 
     return <Navigate to="/login" replace state={{ missingStudent: true }} />
   }
   return <>{children}</>
+}
+
+/** Self-trackers write their own plans; a coach's students only see the one assigned to them. */
+function SelfOnly({ children }: { children: ReactNode }) {
+  return useIsSelf() ? <>{children}</> : <Navigate to="/student" replace />
 }
 
 /** Visitors see the public home page (what it is, prices, policies); signed-in users go to their app. */
@@ -101,6 +107,22 @@ export default function App() {
           <Route path="history" element={<StudentHistoryPage />} />
           <Route path="progress" element={<StudentProgressPage />} />
           <Route path="workouts/new" element={<StudentWorkoutPage />} />
+          <Route
+            path="plans"
+            element={
+              <SelfOnly>
+                <PlansPage />
+              </SelfOnly>
+            }
+          />
+          <Route
+            path="plans/:id"
+            element={
+              <SelfOnly>
+                <PlanEditorPage />
+              </SelfOnly>
+            }
+          />
           <Route path="billing" element={<BillingPage />} />
         </Route>
         <Route path="/billing" element={<BillingRedirect />} />
