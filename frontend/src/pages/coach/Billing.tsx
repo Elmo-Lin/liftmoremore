@@ -466,7 +466,7 @@ function SwitchPlanCard({ billing: b }: { billing: Billing }) {
       <p className="mt-1.5 text-sm text-ink-600">
         只剩你一個人帶學員時，可以改回{PLANS.pro.name}（每月 {twd(PLANS.pro.price)} 起）。學員、課表、紀錄與堂數都會保留，工作室名稱也會留著，之後隨時可以再升級。
       </p>
-      {othersRemain && <p className="mt-2 text-[13px] text-warn-600">工作室裡還有其他教練（含邀請中），請先到「工作室」頁面停用他們。</p>}
+      {othersRemain && <p className="mt-2 text-[13px] text-warn-600">工作室裡還有其他教練（含邀請中），請先到「工作室」頁面把他們移出。</p>}
       <Button variant="secondary" className="mt-4 h-11 md:h-10" disabled={busy || othersRemain} onClick={() => setConfirming(true)}>
         {busy ? '處理中…' : '改回自由教練'}
       </Button>

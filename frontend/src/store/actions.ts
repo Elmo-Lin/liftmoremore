@@ -225,7 +225,7 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
       if (actor() !== 'owner' || !d.studio) return fail('只有工作室經營者可以執行此操作')
       const coach = d.studio.coaches.find((c) => c.id === coachId)
       if (!coach) return fail('找不到此教練')
-      if (coach.role === 'owner') return fail('無法停用經營者')
+      if (coach.role === 'owner') return fail('無法移除經營者')
       const theirs = d.relationships.some((r) => r.coachId === coachId)
       if (theirs && (!transferTo || transferTo === coachId || !isActiveCoach(d, transferTo))) return fail('請選擇接手學員的教練')
       update((x) => ({
@@ -233,10 +233,8 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
         relationships: x.relationships.map((r) => (r.coachId === coachId && transferTo ? { ...r, coachId: transferTo } : r)),
         studio: x.studio && {
           ...x.studio,
-          coaches:
-            coach.status === 'invited'
-              ? x.studio.coaches.filter((c) => c.id !== coachId)
-              : x.studio.coaches.map((c) => (c.id === coachId ? { ...c, status: 'inactive' as const, inviteCode: undefined } : c)),
+          // Removed coaches leave the studio (on the server they become free coaches elsewhere).
+          coaches: x.studio.coaches.filter((c) => c.id !== coachId),
         },
       }))
       return ok(undefined)

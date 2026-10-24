@@ -444,8 +444,13 @@ class ApiIntegrationTests {
 
         assertThat(call(post("/api/studio/coaches/" + ben[0] + "/deactivate"), st.owner(), Map.of()).status()).as("must say who takes ben's students").isEqualTo(400);
         assertThat(call(post("/api/studio/coaches/" + ben[0] + "/deactivate"), st.owner(), Map.of("transferTo", st.ownerId())).status()).isEqualTo(204);
-        assertThat(call(get("/api/bootstrap"), ben[1], null).status()).as("ben's token stops working at once").isEqualTo(401);
-        assertThat(call(post("/api/auth/login"), null, Map.of("email", "ben-" + suffix + "@example.com", "password", "coach12345")).status()).isEqualTo(401);
+        assertThat(call(get("/api/bootstrap"), ben[1], null).status()).as("ben's studio token stops working at once").isEqualTo(401);
+        Resp benAgain = call(post("/api/auth/login"), null, Map.of("email", "ben-" + suffix + "@example.com", "password", "coach12345"));
+        assertThat(benAgain.status()).as("ben keeps his account, as a free coach").isEqualTo(200);
+        JsonNode benOwn = call(get("/api/bootstrap"), benAgain.body().get("token").asString(), null).body();
+        assertThat(benOwn.get("students").size()).as("in a fresh workspace of his own").isZero();
+        assertThat(benOwn.get("billing").get("status").asString()).isEqualTo("trialing");
+        assertThat(call(get("/api/bootstrap"), st.owner(), null).body().get("studio").get("coaches").toString()).doesNotContain("ben-" + suffix);
         assertThat(call(get("/api/students/" + s1), st.owner(), null).status()).isEqualTo(200);
         assertThat(call(post("/api/studio/coaches"), st.owner(), Map.of("name", "cat", "email", "cat-" + suffix + "@example.com")).status())
                 .as("ben's seat is free again").isEqualTo(201);

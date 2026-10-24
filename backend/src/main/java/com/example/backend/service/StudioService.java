@@ -142,12 +142,14 @@ public class StudioService {
     }
 
     /**
-     * The coach can no longer sign in. Their students move to {@code transferTo} first. A coach who
-     * never activated is removed entirely, freeing their email.
+     * The owner removes a coach from the studio. Their students move to {@code transferTo} first
+     * (required when they have any). A coach who already activated keeps their account as a free
+     * coach with a workspace of their own (and is emailed); one who never activated is deleted,
+     * freeing their seat and email.
      */
     public void deactivate(CurrentUser user, String coachId, String transferTo) {
         UserAccount coach = memberOf(user.requireOwner(), coachId);
-        if (!Domain.COACH.equals(coach.role)) throw ApiException.badRequest("無法停用經營者");
+        if (!Domain.COACH.equals(coach.role)) throw ApiException.badRequest("無法移除經營者");
         List<Student> theirs = db.list(db.coachCol(user.coachId(), Db.STUDENTS), Student.class).stream()
                 .filter(s -> coachId.equals(s.coach()))
                 .toList();
@@ -160,9 +162,13 @@ public class StudioService {
         if (!coach.hasLogin()) {
             db.delete(db.doc(Db.EMAILS, StudentService.key(coach.email)));
             db.delete(db.doc(Db.USERS, coach.id));
-        } else {
-            db.update(db.doc(Db.USERS, coach.id), "active", false);
+            return;
         }
+        Coach studio = db.get(db.doc(Db.COACHES, user.coachId()), Coach.class).orElseThrow(() -> ApiException.notFound("找不到工作室"));
+        becomeFreeCoach(coach);
+        String text = "你已被移出「" + studioName(studio) + "」。你的帳號已改為自由教練，有自己的空間並可免費試用 10 天，請用原本的方式重新登入。"
+                + "\n\n原本帶的學員留在工作室，訓練紀錄與堂數由工作室保留。\n\nLift More More";
+        mail.send(coach.email, "你已被移出工作室", text, html(text));
     }
 
     /**
@@ -178,31 +184,14 @@ public class StudioService {
         List<Student> theirs = db.list(db.coachCol(spaceId, Db.STUDENTS), Student.class).stream().filter(s -> user.userId().equals(s.coach())).toList();
         for (Student s : theirs) db.update(db.coachDoc(spaceId, Db.STUDENTS, s.id), "assignedCoachId", null);
 
-        Instant now = Instant.now();
-        Coach own = new Coach();
-        own.id = me.id;
-        own.name = me.name;
-        own.email = me.email;
-        own.phone = me.phone;
-        own.title = me.title != null ? me.title : "教練";
-        own.studio = "";
-        own.subscription = Plans.trial(now);
-        own.createdAt = now;
-        db.transaction(tx -> {
-            tx.create(db.doc(Db.COACHES, own.id), own);
-            var meRef = db.doc(Db.USERS, me.id);
-            tx.update(meRef, "coachId", me.id);
-            tx.update(meRef, "inviteCode", null);
-            return null;
-        });
+        becomeFreeCoach(me);
 
         UserAccount owner = db.get(db.doc(Db.USERS, spaceId), UserAccount.class).orElse(null);
         if (owner != null && owner.email != null) {
-            String text = me.name + " 已退出「" + (studio.studio == null ? "工作室" : studio.studio) + "」，改為自由教練。"
+            String text = me.name + " 已退出「" + studioName(studio) + "」，改為自由教練。"
                     + (theirs.isEmpty() ? "" : "\n\n他帶的 " + theirs.size() + " 位學員已轉給你，訓練紀錄與堂數都保留，可以在工作室頁面重新分配給其他教練。")
                     + "\n\nLift More More";
-            String html = "<p>" + text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n\n", "</p><p>") + "</p>";
-            mail.send(owner.email, me.name + " 已退出工作室", text, html);
+            mail.send(owner.email, me.name + " 已退出工作室", text, html(text));
         }
         return auth.issueFor(me.id);
     }
@@ -215,6 +204,39 @@ public class StudioService {
     }
 
     // ----------------------------------------------------------------------------- helpers
+
+    /**
+     * Moves a studio coach out into a free-coach workspace of their own (fresh trial). Their old
+     * token stops working (it names the studio), so they sign in again into the new workspace.
+     */
+    private void becomeFreeCoach(UserAccount coach) {
+        Instant now = Instant.now();
+        Coach own = new Coach();
+        own.id = coach.id;
+        own.name = coach.name;
+        own.email = coach.email;
+        own.phone = coach.phone;
+        own.title = coach.title != null ? coach.title : "教練";
+        own.studio = "";
+        own.subscription = Plans.trial(now);
+        own.createdAt = now;
+        db.transaction(tx -> {
+            tx.create(db.doc(Db.COACHES, own.id), own);
+            var ref = db.doc(Db.USERS, coach.id);
+            tx.update(ref, "coachId", coach.id);
+            tx.update(ref, "inviteCode", null);
+            return null;
+        });
+    }
+
+    private static String studioName(Coach studio) {
+        return studio.studio == null || studio.studio.isBlank() ? "工作室" : studio.studio;
+    }
+
+    /** Plain text (paragraphs split by a blank line) as escaped HTML. */
+    private static String html(String text) {
+        return "<p>" + text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n\n", "</p><p>") + "</p>";
+    }
 
     private UserAccount memberOf(CurrentUser user, String coachId) {
         UserAccount u = db.get(db.doc(Db.USERS, coachId), UserAccount.class).orElseThrow(() -> ApiException.notFound("找不到此教練"));

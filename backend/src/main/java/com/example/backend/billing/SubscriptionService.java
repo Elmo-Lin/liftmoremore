@@ -233,7 +233,7 @@ public class SubscriptionService {
         if (!Plans.TEAM.equals(Plans.planOf(space).id())) throw ApiException.conflict("not_studio", "目前不是工作室方案");
         boolean othersStay = db.list(db.fs.collection(Db.USERS).whereEqualTo("coachId", space.id), UserAccount.class).stream()
                 .anyMatch(u -> !u.id.equals(space.id) && Domain.COACH.equals(u.role) && !Boolean.FALSE.equals(u.active));
-        if (othersStay) throw ApiException.conflict("coaches_remain", "工作室裡還有其他教練，請先到工作室頁面停用他們，才能改回自由教練");
+        if (othersStay) throw ApiException.conflict("coaches_remain", "工作室裡還有其他教練，請先到工作室頁面把他們移出，才能改回自由教練");
         Subscription sub = subscriptionOf(space);
         if (!hasMandate(sub)) {
             apply(space, sub, Plans.PRO, null, sub.extraStudentPacks, 0, sub.nextExtraStudentPacks, null, sub.monthlyAmount);

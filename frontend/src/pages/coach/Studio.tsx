@@ -127,7 +127,7 @@ function ManageStudio() {
       />
       {used >= seats && (
         <p className="-mt-2 mb-4 text-[13px] text-ink-500">
-          名額已滿。停用一位教練即可釋出名額
+          名額已滿。移出一位教練即可釋出名額
           {data.billing?.canManage && (
             <>
               ，或
@@ -148,7 +148,7 @@ function ManageStudio() {
       </div>
 
       <Card id="coaches" className="mt-4 scroll-mt-16 md:scroll-mt-6">
-        <CardHeader title="教練" description="停用教練前，會請你選擇由誰接手他的學員" />
+        <CardHeader title="教練" description="移出教練前，會請你選擇由誰接手他的學員" />
         <ul className="divide-y divide-line border-t border-line">
           {studio.coaches.map((c) => {
             const st = statsFor(c.id)
@@ -182,7 +182,7 @@ function ManageStudio() {
                   )}
                   {c.role === 'coach' && c.status !== 'inactive' && (
                     <Button variant="ghost" size="sm" icon={UserMinus} onClick={() => setDeactivating(c)}>
-                      {c.status === 'invited' ? '取消邀請' : '停用'}
+                      {c.status === 'invited' ? '取消邀請' : '移出'}
                     </Button>
                   )}
                 </div>
@@ -344,7 +344,7 @@ function DeactivateCoachModal({ coach, onClose }: { coach: CoachMember; onClose:
   const confirm = () => {
     const res = actions.deactivateCoach(coach.id, theirs.length ? to : undefined)
     if (!res.ok) return notify(res.error, 'error')
-    notify(pending ? `已取消邀請 ${coach.name}` : `已停用 ${coach.name}${theirs.length ? `，${theirs.length} 位學員已轉給 ${others.find((c) => c.id === to)?.name}` : ''}`)
+    notify(pending ? `已取消邀請 ${coach.name}` : `已將 ${coach.name} 移出工作室${theirs.length ? `，${theirs.length} 位學員已轉給 ${others.find((c) => c.id === to)?.name}` : ''}`)
     onClose()
   }
 
@@ -352,7 +352,7 @@ function DeactivateCoachModal({ coach, onClose }: { coach: CoachMember; onClose:
     <Modal
       open
       onClose={onClose}
-      title={pending ? `取消邀請 ${coach.name}？` : `停用 ${coach.name}？`}
+      title={pending ? `取消邀請 ${coach.name}？` : `將 ${coach.name} 移出工作室？`}
       size="sm"
       footer={
         <>
@@ -360,13 +360,13 @@ function DeactivateCoachModal({ coach, onClose }: { coach: CoachMember; onClose:
             取消
           </Button>
           <Button variant="destructive" onClick={confirm} className="h-11 md:h-10" disabled={theirs.length > 0 && !to}>
-            {pending ? '取消邀請' : '停用'}
+            {pending ? '取消邀請' : '移出工作室'}
           </Button>
         </>
       }
     >
       <div className="space-y-4 text-sm text-ink-700">
-        <p>{pending ? '邀請碼會失效，並釋出這個名額。' : `${coach.name} 將無法再登入，並釋出這個名額。過去的訓練紀錄會保留。`}</p>
+        <p>{pending ? '邀請碼會失效，並釋出這個名額。' : `${coach.name} 會離開工作室，改成自己的自由教練帳號（免費試用 10 天），並釋出這個名額。我們會寄 Email 通知他。他過去記錄的訓練會留在工作室。`}</p>
         {theirs.length > 0 && (
           <SelectInput label={`${coach.name} 的 ${theirs.length} 位學員交給`} value={to} onChange={(e) => setTo(e.target.value)} hint="學員的訓練紀錄與堂數都會一起轉移">
             {others.map((c) => (

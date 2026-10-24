@@ -47,7 +47,9 @@ public class CurrentUserResolver implements WebMvcConfigurer, HandlerMethodArgum
         CurrentUser user = CurrentUser.from(jwt);
         if (user.isStudioCoach()) {
             UserAccount u = db.get(db.doc(Db.USERS, user.userId()), UserAccount.class).orElse(null);
-            if (u == null || Boolean.FALSE.equals(u.active) || !user.coachId().equals(u.coachId)) throw ApiException.unauthorized("此帳號已停用，請聯絡工作室");
+            if (u == null || Boolean.FALSE.equals(u.active)) throw ApiException.unauthorized("此帳號已停用，請聯絡工作室");
+            // Left or was removed from the studio: their account now has its own workspace.
+            if (!user.coachId().equals(u.coachId)) throw ApiException.unauthorized("你已不在這個工作室，請重新登入");
         }
         return user;
     }
