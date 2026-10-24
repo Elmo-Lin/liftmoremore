@@ -26,6 +26,12 @@ export const subscribe = (input: { extraStudentPacks: number; extraCoachSeats: n
 export const changePlan = (input: { plan: PlanId; extraStudentPacks: number; extraCoachSeats: number; studioName?: string }, token: string) =>
   api<{ applied: boolean; checkout?: Checkout }>('POST', '/billing/change', input, token)
 
+/** Studio → free coach. applied: done now (no running subscription); otherwise from the next renewal. */
+export const downgradeToPro = (token: string) => api<{ applied: boolean }>('POST', '/billing/downgrade', undefined, token)
+
+/** Keep the studio after all. */
+export const cancelDowngrade = (token: string) => api('DELETE', '/billing/downgrade', undefined, token)
+
 export const cancelSubscription = (token: string) => api('POST', '/billing/cancel', undefined, token)
 
 /** Leaves the app for NewebPay; it sends the browser back to /coach/billing?result=… */

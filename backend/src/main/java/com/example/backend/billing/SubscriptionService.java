@@ -86,7 +86,11 @@ public class SubscriptionService {
 
     /** Before inviting a coach; {@code used} counts the owner and every active or invited coach. */
     public void requireCoachSeat(String spaceId, long used) {
-        Access a = access(spaceId);
+        Coach space = space(spaceId);
+        if (space.subscription != null && Plans.PRO.equals(space.subscription.nextPlan)) {
+            throw ApiException.conflict("downgrade_scheduled", "已排定下期改回自由教練，請先在「方案與付款」取消，才能邀請教練");
+        }
+        Access a = Plans.access(space, Instant.now());
         int seats = a.coachLimit();
         if (used >= seats) throw ApiException.conflict("seats_full", "教練名額已滿（" + seats + " 位，含經營者）。請至「方案與付款」加購教練名額。");
     }
@@ -119,7 +123,7 @@ public class SubscriptionService {
         return new BillingDto(a.plan().id(), a.status(), a.writable(), canManage(user), a.trialEndsAt(),
                 sub == null ? null : sub.currentPeriodEnd, packs, seats,
                 sub == null ? null : sub.nextExtraStudentPacks, sub == null ? null : sub.nextExtraCoachSeats,
-                monthly, a.studentLimit(), a.coachLimit(), activeStudents, hiddenActive, hasMandate(sub), newebPay.configured());
+                sub == null ? null : sub.nextPlan, monthly, a.studentLimit(), a.coachLimit(), activeStudents, hiddenActive, hasMandate(sub), newebPay.configured());
     }
 
     public BillingOverviewDto overview(CurrentUser user) {
@@ -159,7 +163,11 @@ public class SubscriptionService {
         return new CheckoutDto(form.action(), form.fields());
     }
 
-    /** Add-ons and Pro → Team. During the trial changes are free; with a mandate, upgrades are prorated. */
+    /**
+     * Add-ons, and upgrades: 自主訓練 → Pro, Pro → Team. Without a running mandate (trial, lapsed
+     * plan) a plan change is free and immediate; with one, upgrades are prorated. Team → Pro is
+     * {@link #downgradeToPro}.
+     */
     public ChangeResultDto change(CurrentUser user, ChangePlanInput in) {
         requireManager(user);
         Instant now = Instant.now();
@@ -168,23 +176,26 @@ public class SubscriptionService {
         Plan current = Plans.planOf(space);
         Plan target = Plans.plan(in.plan());
         if (Plans.TEAM.equals(current.id()) && Plans.PRO.equals(target.id())) {
-            throw ApiException.conflict("downgrade_unsupported", "工作室方案無法直接改回自由教練，請聯絡我們");
+            throw ApiException.conflict("use_downgrade", "請使用「改回自由教練」");
         }
-        if (Plans.SELF.equals(current.id())) throw ApiException.conflict("nothing_to_change", "自主訓練方案沒有可調整的項目");
+        if (Plans.SELF.equals(current.id()) && !Plans.PRO.equals(target.id())) {
+            throw ApiException.conflict("nothing_to_change", "自主訓練可以升級為自由教練，沒有其他可調整的項目");
+        }
         if (Plans.SELF.equals(target.id())) throw ApiException.badRequest("無法改為自主訓練方案");
         boolean upgrading = !current.id().equals(target.id());
         String studioName = in.studioName() == null ? "" : in.studioName().trim();
-        if (upgrading && studioName.isEmpty()) throw ApiException.badRequest("請輸入工作室名稱");
+        if (upgrading && Plans.TEAM.equals(target.id()) && studioName.isEmpty()) throw ApiException.badRequest("請輸入工作室名稱");
         int packs = in.extraStudentPacks();
         int seats = Plans.TEAM.equals(target.id()) ? in.extraCoachSeats() : 0;
-        if (!access.writable()) throw new ApiException(HttpStatus.PAYMENT_REQUIRED, "subscription_required", "方案已到期，請先訂閱");
 
         Subscription sub = subscriptionOf(space);
         if (!hasMandate(sub)) {
-            if (!"trialing".equals(sub.status)) throw ApiException.conflict("subscription_canceled", "已取消訂閱，請重新訂閱後再調整方案");
-            apply(space, sub, user.userId(), upgrading ? studioName : null, packs, seats, null, null, sub.monthlyAmount);
+            // Add-ons are free only during the trial; switching plan type never costs anything without a mandate.
+            if (!"trialing".equals(sub.status) && !upgrading) throw ApiException.conflict("subscription_canceled", "已取消或到期，請重新訂閱後再調整名額");
+            apply(space, sub, upgrading ? target.id() : null, studioName, packs, seats, null, null, sub.monthlyAmount);
             return new ChangeResultDto(true, null);
         }
+        if (!access.writable()) throw new ApiException(HttpStatus.PAYMENT_REQUIRED, "subscription_required", "方案已到期，請先訂閱");
 
         int nowPacks = Math.max(sub.extraStudentPacks, packs);
         int nowSeats = Math.max(sub.extraCoachSeats, seats);
@@ -197,7 +208,7 @@ public class SubscriptionService {
             BillingOrder order = order(space.id, user.userId(), "change", target.id(), nowPacks, nowSeats);
             order.amount = charge;
             order.monthlyAmount = newMonthly;
-            order.studioName = upgrading ? studioName : null;
+            order.studioName = upgrading && Plans.TEAM.equals(target.id()) ? studioName : null;
             order.nextExtraStudentPacks = nextPacks;
             order.nextExtraCoachSeats = nextSeats;
             db.create(db.doc(Db.BILLING_ORDERS, order.id), order);
@@ -207,8 +218,50 @@ public class SubscriptionService {
         }
         // Only downgrades (or nothing): the mandate charges less from the next period.
         if (newMonthly != sub.monthlyAmount) newebPay.alterAmount(sub.mandateOrderNo, sub.periodNo, newMonthly, now);
-        apply(space, sub, user.userId(), null, nowPacks, nowSeats, nextPacks, nextSeats, newMonthly);
+        apply(space, sub, null, null, nowPacks, nowSeats, nextPacks, nextSeats, newMonthly);
         return new ChangeResultDto(true, null);
+    }
+
+    /**
+     * A studio goes back to a free coach (Pro). Only when no other coach is active or invited, so
+     * nobody loses their account. Without a mandate it happens now; with one, the current period
+     * stays Team and the mandate charges the Pro price from the next renewal, which switches over.
+     */
+    public ChangeResultDto downgradeToPro(CurrentUser user) {
+        requireManager(user);
+        Coach space = space(user.coachId());
+        if (!Plans.TEAM.equals(Plans.planOf(space).id())) throw ApiException.conflict("not_studio", "目前不是工作室方案");
+        boolean othersStay = db.list(db.fs.collection(Db.USERS).whereEqualTo("coachId", space.id), UserAccount.class).stream()
+                .anyMatch(u -> !u.id.equals(space.id) && Domain.COACH.equals(u.role) && !Boolean.FALSE.equals(u.active));
+        if (othersStay) throw ApiException.conflict("coaches_remain", "工作室裡還有其他教練，請先到工作室頁面停用他們，才能改回自由教練");
+        Subscription sub = subscriptionOf(space);
+        if (!hasMandate(sub)) {
+            apply(space, sub, Plans.PRO, null, sub.extraStudentPacks, 0, sub.nextExtraStudentPacks, null, sub.monthlyAmount);
+            return new ChangeResultDto(true, null);
+        }
+        int packs = sub.nextExtraStudentPacks != null ? sub.nextExtraStudentPacks : sub.extraStudentPacks;
+        int monthly = Plans.monthly(Plans.PRO_PLAN, packs, 0);
+        newebPay.alterAmount(sub.mandateOrderNo, sub.periodNo, monthly, Instant.now());
+        sub.nextPlan = Plans.PRO;
+        sub.nextExtraCoachSeats = 0;
+        sub.monthlyAmount = monthly;
+        db.update(db.doc(Db.COACHES, space.id), "subscription", db.encode(sub));
+        return new ChangeResultDto(false, null);
+    }
+
+    /** Keeps the studio after all: the mandate goes back to the Team price. */
+    public void cancelDowngrade(CurrentUser user) {
+        requireManager(user);
+        Coach space = space(user.coachId());
+        Subscription sub = space.subscription;
+        if (sub == null || !Plans.PRO.equals(sub.nextPlan)) throw ApiException.conflict("no_downgrade", "沒有排定改回自由教練");
+        int packs = sub.nextExtraStudentPacks != null ? sub.nextExtraStudentPacks : sub.extraStudentPacks;
+        int monthly = Plans.monthly(Plans.TEAM_PLAN, packs, sub.extraCoachSeats);
+        newebPay.alterAmount(sub.mandateOrderNo, sub.periodNo, monthly, Instant.now());
+        sub.nextPlan = null;
+        sub.nextExtraCoachSeats = null;
+        sub.monthlyAmount = monthly;
+        db.update(db.doc(Db.COACHES, space.id), "subscription", db.encode(sub));
     }
 
     /** Stops future charges; the workspace stays writable until the paid period ends. */
@@ -269,6 +322,7 @@ public class SubscriptionService {
                 sub.extraCoachSeats = order.extraCoachSeats;
                 sub.nextExtraStudentPacks = null;
                 sub.nextExtraCoachSeats = null;
+                sub.nextPlan = null;
                 sub.monthlyAmount = order.monthlyAmount;
                 order.status = "paid";
                 order.paidAt = now;
@@ -283,11 +337,17 @@ public class SubscriptionService {
                 if (sub.nextExtraCoachSeats != null) sub.extraCoachSeats = sub.nextExtraCoachSeats;
                 sub.nextExtraStudentPacks = null;
                 sub.nextExtraCoachSeats = null;
+                if (Plans.PRO.equals(sub.nextPlan)) {
+                    switchPlan(tx, space, Plans.PRO, null);
+                    sub.extraCoachSeats = 0;
+                    sub.nextPlan = null;
+                }
                 if (!"canceled".equals(sub.status)) sub.status = "active";
             } else {
                 return true; // already applied
             }
-            tx.update(spaceRef, "subscription", db.encode(sub));
+            space.subscription = sub;
+            tx.set(spaceRef, space);
             String id = periodNo + "_" + times;
             tx.set(db.coachDoc(space.id, Db.PAYMENTS, id), payment(id, newMandate ? "subscription" : "renewal", amount, "paid", now));
             return true;
@@ -326,11 +386,7 @@ public class SubscriptionService {
             var spaceRef = db.doc(Db.COACHES, o.workspaceId);
             Coach space = tx.get(spaceRef, Coach.class).orElseThrow();
             Subscription sub = space.subscription;
-            if (o.studioName != null && !Domain.SPACE_STUDIO.equals(space.kind)) {
-                space.kind = Domain.SPACE_STUDIO;
-                space.studio = o.studioName;
-                tx.update(db.doc(Db.USERS, space.id), "role", Domain.OWNER);
-            }
+            if (!o.plan.equals(Plans.planOf(space).id())) switchPlan(tx, space, o.plan, o.studioName);
             sub.extraStudentPacks = o.extraStudentPacks;
             sub.extraCoachSeats = o.extraCoachSeats;
             sub.nextExtraStudentPacks = o.nextExtraStudentPacks;
@@ -359,24 +415,22 @@ public class SubscriptionService {
         return paid;
     }
 
-    /** Where the browser lands after NewebPay; the app sends /billing on to the caller's own billing page. */
-    /** {@code result}: success, failed, or pending (unknown yet; the server notification decides). */
+    /**
+     * Where the browser lands after NewebPay; the app sends /billing on to the caller's own billing
+     * page. {@code result}: success, failed, or pending (unknown yet; the server notification decides).
+     */
     public String returnUrl(String result) {
         return appUrl + "/billing?result=" + result;
     }
 
     // ----------------------------------------------------------------------------- helpers
 
-    /** Trial-time change: no payment, on at once. */
-    private void apply(Coach space, Subscription sub, String userId, String upgradeTo, int packs, int seats, Integer nextPacks, Integer nextSeats, int monthly) {
+    /** A change that needs no payment, on at once; {@code plan} switches the plan type too. */
+    private void apply(Coach space, Subscription sub, String plan, String studioName, int packs, int seats, Integer nextPacks, Integer nextSeats, int monthly) {
         db.transaction(tx -> {
             var spaceRef = db.doc(Db.COACHES, space.id);
             Coach fresh = tx.get(spaceRef, Coach.class).orElseThrow();
-            if (upgradeTo != null && !Domain.SPACE_STUDIO.equals(fresh.kind)) {
-                fresh.kind = Domain.SPACE_STUDIO;
-                fresh.studio = upgradeTo;
-                tx.update(db.doc(Db.USERS, userId), "role", Domain.OWNER);
-            }
+            if (plan != null) switchPlan(tx, fresh, plan, studioName);
             sub.extraStudentPacks = packs;
             sub.extraCoachSeats = seats;
             sub.nextExtraStudentPacks = nextPacks;
@@ -386,6 +440,24 @@ public class SubscriptionService {
             tx.set(spaceRef, fresh);
             return null;
         });
+    }
+
+    /**
+     * Makes the workspace the given plan's type, and the owner's account the matching role: Team →
+     * studio + owner; Pro → free coach (from a studio, or from a self-tracker, whose own training
+     * stays as a student record of theirs). The workspace's ID is its owner's user ID.
+     */
+    private void switchPlan(Db.Tx tx, Coach space, String plan, String studioName) {
+        var owner = db.doc(Db.USERS, space.id);
+        if (Plans.TEAM.equals(plan)) {
+            space.kind = Domain.SPACE_STUDIO;
+            if (studioName != null && !studioName.isBlank()) space.studio = studioName.trim();
+            tx.update(owner, "role", Domain.OWNER);
+        } else if (Plans.PRO.equals(plan)) {
+            if (Plans.isSelf(space) && (space.title == null || space.title.isBlank())) space.title = "教練";
+            space.kind = Domain.SPACE_SOLO;
+            tx.update(owner, "role", Domain.COACH);
+        }
     }
 
     /** The stored subscription, or the implicit trial of a workspace that never had one. */

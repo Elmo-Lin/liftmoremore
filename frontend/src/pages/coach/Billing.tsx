@@ -1,8 +1,8 @@
 import { Check, CreditCard, Minus, Plus, Receipt } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { refreshSession } from '../../api/auth'
-import { cancelSubscription, changePlan, fetchBilling, goToCheckout, subscribe, type Payment } from '../../api/billing'
+import { cancelDowngrade, cancelSubscription, changePlan, downgradeToPro, fetchBilling, goToCheckout, subscribe, type Payment } from '../../api/billing'
 import { isApiMode } from '../../api/client'
 import { Button, IconButton } from '../../components/ui/Button'
 import { Segmented, TextInput } from '../../components/ui/Form'
@@ -91,6 +91,7 @@ export function BillingPage() {
         {billing.canManage ? (
           <>
             <PlanEditor billing={billing} />
+            <SwitchPlanCard billing={billing} />
             <PaymentHistory payments={payments} />
             {billing.subscribed && billing.status !== 'canceled' && billing.status !== 'expired' && <CancelSubscription billing={billing} />}
           </>
@@ -124,7 +125,7 @@ function StatusCard({ billing: b, coachesUsed }: { billing: Billing; coachesUsed
     canceled: b.currentPeriodEnd ? `已取消訂閱，可使用至 ${formatDate(b.currentPeriodEnd, { year: true })}，之後轉為唯讀。` : '已取消訂閱。',
     expired: '方案已到期，目前為唯讀。資料都還在，訂閱後立即恢復新增與編輯。',
   }[b.status]
-  const pending = b.nextExtraStudentPacks != null || b.nextExtraCoachSeats != null
+  const pending = b.nextPlan !== 'pro' && (b.nextExtraStudentPacks != null || b.nextExtraCoachSeats != null)
 
   return (
     <Card className="p-5">
@@ -138,6 +139,11 @@ function StatusCard({ billing: b, coachesUsed }: { billing: Billing; coachesUsed
         </div>
       </div>
       <p className="mt-2 text-sm text-ink-600">{detail}</p>
+      {b.nextPlan === 'pro' && (
+        <p className="mt-2 text-[13px] text-ink-500">
+          下期{b.currentPeriodEnd ? `（${formatDate(b.currentPeriodEnd, { year: true })}）` : ''}起改為{PLANS.pro.name}。
+        </p>
+      )}
       {pending && (
         <p className="mt-2 text-[13px] text-ink-500">
           下期起：
@@ -347,6 +353,136 @@ function Stepper({ label, hint, value, max, unit, onChange }: { label: string; h
         <IconButton icon={Plus} label={`增加${label}`} className="border border-line" disabled={value >= max} onClick={() => onChange(Math.min(max, value + 1))} />
       </div>
     </div>
+  )
+}
+
+// ----------------------------------------------------------------------------- switch plan type
+
+/** 自主訓練 → free coach, and studio → free coach (the other direction, Pro → Team, is in the plan editor). */
+function SwitchPlanCard({ billing: b }: { billing: Billing }) {
+  const { data, reload } = useData()
+  const { session, signIn } = useSession()
+  const navigate = useNavigate()
+  const notify = useToast()
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const paying = b.subscribed && (b.status === 'active' || b.status === 'past_due')
+  const until = b.currentPeriodEnd ? formatDate(b.currentPeriodEnd, { year: true }) : '本期結束'
+
+  const run = async (task: (token: string) => Promise<void>) => {
+    if (!session?.token) return
+    setConfirming(false)
+    setBusy(true)
+    try {
+      await task(session.token)
+    } catch (e) {
+      notify(e instanceof Error ? e.message : '操作失敗', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (b.plan === 'self') {
+    const charge = paying ? prorate(PLANS.pro.price - PLANS.self.price, b.currentPeriodEnd) : 0
+    const upgrade = () =>
+      run(async (token) => {
+        const r = await changePlan({ plan: 'pro', extraStudentPacks: 0, extraCoachSeats: 0 }, token)
+        if (r.checkout) return goToCheckout(r.checkout)
+        signIn(await refreshSession(token))
+        notify('已升級為自由教練，可以開始新增學員了')
+        navigate('/coach')
+      })
+    return (
+      <Card className="p-5">
+        <p className="font-semibold text-ink-900">升級成自由教練</p>
+        <ul className="mt-2 space-y-1.5 text-sm text-ink-600">
+          <li>・開始帶學員：學員管理、訓練計畫、堂數與進步追蹤。</li>
+          <li>・你自己的訓練紀錄都會保留，出現在學員清單裡，之後也能繼續記錄自己的訓練。</li>
+          <li>
+            ・{PLANS.pro.name} 含 {PLANS.pro.students} 位活躍學員，每月 {twd(PLANS.pro.price)}。
+          </li>
+        </ul>
+        <p className="mt-3 text-[13px] text-ink-500">
+          {paying ? `本期需補 ${twd(charge)}（按剩餘天數比例），下期起每月 ${twd(PLANS.pro.price)}。` : b.status === 'trialing' ? `試用期間免費切換，試用天數照算，結束後每月 ${twd(PLANS.pro.price)}。` : `切換後請訂閱 ${PLANS.pro.name}。`}
+        </p>
+        <Button className="mt-4 h-11 md:h-10" disabled={busy || (charge > 0 && !b.paymentsEnabled)} onClick={() => setConfirming(true)}>
+          {busy ? '處理中…' : '升級成自由教練'}
+        </Button>
+        <ConfirmDialog
+          open={confirming}
+          title="升級成自由教練？"
+          description={charge > 0 ? `將前往藍新金流補 ${twd(charge)}，付款後立即升級。你的訓練紀錄都會保留。` : '帳號會改成自由教練，你的訓練紀錄都會保留在學員清單裡。'}
+          confirmLabel={charge > 0 ? '前往付款' : '升級'}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => void upgrade()}
+        />
+      </Card>
+    )
+  }
+
+  if (b.plan !== 'team') return null
+
+  if (b.nextPlan === 'pro') {
+    return (
+      <Card className="p-5">
+        <p className="font-semibold text-ink-900">已排定改回自由教練</p>
+        <p className="mt-1.5 text-sm text-ink-600">
+          {until} 起改為{PLANS.pro.name}，每月 {twd(b.monthlyAmount)}。在那之前仍可使用工作室的功能，但不能再邀請教練。
+        </p>
+        <Button
+          variant="secondary"
+          className="mt-4 h-11 md:h-10"
+          disabled={busy}
+          onClick={() =>
+            void run(async (token) => {
+              await cancelDowngrade(token)
+              notify('已取消，繼續使用工作室方案')
+              await reload()
+            })
+          }
+        >
+          取消，繼續使用工作室
+        </Button>
+      </Card>
+    )
+  }
+
+  const othersRemain = seatsUsed(data) > 1
+  const packs = b.nextExtraStudentPacks ?? b.extraStudentPacks
+  const downgrade = () =>
+    run(async (token) => {
+      const r = await downgradeToPro(token)
+      if (r.applied) {
+        signIn(await refreshSession(token))
+        notify('已改回自由教練，學員與紀錄都保留')
+      } else {
+        notify(`已排定 ${until} 起改回自由教練`)
+        await reload()
+      }
+    })
+  return (
+    <Card className="p-5">
+      <p className="font-semibold text-ink-900">改回自由教練</p>
+      <p className="mt-1.5 text-sm text-ink-600">
+        只剩你一個人帶學員時，可以改回{PLANS.pro.name}（每月 {twd(PLANS.pro.price)} 起）。學員、課表、紀錄與堂數都會保留，工作室名稱也會留著，之後隨時可以再升級。
+      </p>
+      {othersRemain && <p className="mt-2 text-[13px] text-warn-600">工作室裡還有其他教練（含邀請中），請先到「工作室」頁面停用他們。</p>}
+      <Button variant="secondary" className="mt-4 h-11 md:h-10" disabled={busy || othersRemain} onClick={() => setConfirming(true)}>
+        {busy ? '處理中…' : '改回自由教練'}
+      </Button>
+      <ConfirmDialog
+        open={confirming}
+        title="改回自由教練？"
+        description={
+          paying
+            ? `本期維持工作室方案，${until} 起改為${PLANS.pro.name}，每月 ${twd(monthlyPrice('pro', packs, 0))}。`
+            : `立即改為${PLANS.pro.name}，學員與紀錄都會保留。${b.status === 'trialing' ? `試用結束後每月 ${twd(PLANS.pro.price)} 起。` : ''}`
+        }
+        confirmLabel="改回自由教練"
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => void downgrade()}
+      />
+    </Card>
   )
 }
 

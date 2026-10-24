@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -51,6 +52,18 @@ public class BillingController {
     @PostMapping("/change")
     public ChangeResultDto change(CurrentUser user, @Valid @RequestBody ChangePlanInput in) {
         return subscriptions.change(user, in);
+    }
+
+    /** Studio → free coach: now without a running subscription, otherwise from the next renewal. applied: done now. */
+    @PostMapping("/downgrade")
+    public ChangeResultDto downgrade(CurrentUser user) {
+        return subscriptions.downgradeToPro(user);
+    }
+
+    @DeleteMapping("/downgrade")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void cancelDowngrade(CurrentUser user) {
+        subscriptions.cancelDowngrade(user);
     }
 
     @PostMapping("/cancel")

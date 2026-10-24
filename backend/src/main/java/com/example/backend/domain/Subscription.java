@@ -18,6 +18,8 @@ public class Subscription {
     /** Downgrades wait for the next renewal; null = no change scheduled. */
     public Integer nextExtraStudentPacks;
     public Integer nextExtraCoachSeats;
+    /** A plan change waiting for the next renewal: "pro" when a studio goes back to a free coach. */
+    public String nextPlan;
     /** What the NewebPay mandate charges each month. */
     public int monthlyAmount;
     /** NewebPay periodic mandate: its order number and PeriodNo. */

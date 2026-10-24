@@ -20,10 +20,11 @@ import { SessionPackagesPanel } from '../../components/coach/SessionPackagesPane
 import { StudentFormModal } from '../../components/coach/StudentFormModal'
 import { PRTable } from '../../components/progress/PRTable'
 import { Button, ButtonLink } from '../../components/ui/Button'
-import { Segmented, SelectInput, TextArea } from '../../components/ui/Form'
+import { SelectInput, TextArea } from '../../components/ui/Form'
 import { ConfirmDialog } from '../../components/ui/Modal'
 import { Avatar, Badge, BalanceMeter, Card, CardHeader, EmptyState, PageHeader, Tabs } from '../../components/ui/Primitives'
 import { PageLoading } from '../../components/ui/PageLoading'
+import { DraftsCard } from '../../components/workout/DraftsCard'
 import { PlanDayView } from '../../components/workout/PlanDayView'
 import { WorkoutDetailModal, WorkoutRow } from '../../components/workout/WorkoutDetail'
 import { formatDate, formatTime, GENDER_LABEL, GOAL_LABEL, relativeDay } from '../../lib/format'
@@ -132,7 +133,12 @@ export function StudentDetailPage() {
 
       <div className="mt-5">
         {tab === 'overview' && <Overview key={student.id} student={student} onTab={(t) => setParams({ tab: t })} pending={pending} />}
-        {tab === 'history' && <HistoryTab key={student.id} workouts={workouts} />}
+        {tab === 'history' && (
+          <div className="space-y-4">
+            <DraftsCard studentId={student.id} createdBy="coach" loggerPath="/coach/workouts/new" />
+            <HistoryTab key={student.id} workouts={workouts} />
+          </div>
+        )}
         {tab === 'plans' && <PlansTab key={`${student.id}:${student.activePlanId}`} student={student} />}
         {tab === 'packages' && <SessionPackagesPanel studentId={student.id} />}
         {tab === 'progress' && (
@@ -382,29 +388,65 @@ function CoachAssignment({ student }: { student: Student }) {
   )
 }
 
+type HistoryFilter = 'all' | 'coached' | 'independent' | 'pending'
+
+/** What each filter shows, in plain words (the chips alone did not explain themselves). */
+const FILTER_HINT: Record<HistoryFilter, string> = {
+  all: '所有已完成的訓練。點一筆可以查看內容、扣堂或撤銷扣堂。',
+  coached: '由教練帶的課，完成後可以扣除堂數。',
+  independent: '學員自己記錄的訓練，不會扣除堂數。',
+  pending: '已完成、但還沒扣堂的教練課。點進去就可以扣堂。',
+}
+
 function HistoryTab({ workouts }: { workouts: WorkoutSession[] }) {
   const { data } = useData()
-  const [type, setType] = useState<'all' | 'coached' | 'independent' | 'pending'>('all')
+  const [filter, setFilter] = useState<HistoryFilter>('all')
   const [open, setOpen] = useState<WorkoutSession | null>(null)
-  const list = workouts.filter((w) => {
-    if (type === 'pending') return w.type === 'coached' && !deductionFor(w.id, data.transactions)
-    return type === 'all' || w.type === type
-  })
+  const matches = (w: WorkoutSession, f: HistoryFilter) =>
+    f === 'pending' ? w.type === 'coached' && !deductionFor(w.id, data.transactions) : f === 'all' || w.type === f
+  const list = workouts.filter((w) => matches(w, filter))
+  const filters: { value: HistoryFilter; label: string }[] = [
+    { value: 'all', label: '全部' },
+    { value: 'coached', label: '教練課' },
+    { value: 'independent', label: '自主訓練' },
+    { value: 'pending', label: '未扣堂' },
+  ]
+
+  if (!workouts.length) {
+    return (
+      <Card>
+        <EmptyState icon={History} title="還沒有完成的訓練" description="按上方「開始訓練」記錄第一堂課；學員自己記錄的自主訓練也會出現在這裡。" />
+      </Card>
+    )
+  }
+
   return (
     <div>
-      <div className="mb-3 overflow-x-auto">
-        <Segmented
-          label="類型篩選"
-          value={type}
-          onChange={setType}
-          options={[
-            { value: 'all', label: '全部' },
-            { value: 'coached', label: '教練課' },
-            { value: 'independent', label: '自主訓練' },
-            { value: 'pending', label: '未扣堂' },
-          ]}
-        />
+      {/* Filter chips, not tabs: they narrow the list below, with how many each one holds. */}
+      <div className="scrollbar-none -mx-4 flex gap-1.5 overflow-x-auto px-4 md:mx-0 md:px-0" role="group" aria-label="篩選訓練紀錄">
+        {filters.map((f) => {
+          const count = workouts.filter((w) => matches(w, f.value)).length
+          const active = filter === f.value
+          const attention = f.value === 'pending' && count > 0
+          return (
+            <button
+              key={f.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setFilter(f.value)}
+              className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium ${
+                active ? 'bg-accent-600 text-white' : 'bg-fill text-ink-800 hover:bg-[#7676802e]'
+              }`}
+            >
+              {f.label}
+              <span className={`tabular rounded-full px-1.5 text-[11px] ${active ? 'bg-white/25' : attention ? 'bg-warn-100 text-warn-600' : 'bg-black/6 text-ink-500'}`}>
+                {count}
+              </span>
+            </button>
+          )
+        })}
       </div>
+      <p className="mt-2 mb-3 text-[13px] text-ink-500">{FILTER_HINT[filter]}</p>
       <Card>
         {list.length ? (
           <div className="divide-y divide-line">
@@ -413,10 +455,9 @@ function HistoryTab({ workouts }: { workouts: WorkoutSession[] }) {
             ))}
           </div>
         ) : (
-          <EmptyState compact icon={History} title={type === 'pending' ? '沒有未扣堂的課程' : '沒有符合的紀錄'} />
+          <EmptyState compact icon={History} title={filter === 'pending' ? '教練課都已扣堂' : filter === 'independent' ? '學員還沒有自主訓練紀錄' : '還沒有教練課紀錄'} />
         )}
       </Card>
-      <p className="mt-3 text-xs text-ink-500">自主訓練由學員自行記錄，不會扣除教練課堂數。教練課完成後可在紀錄中個別扣堂或撤銷。</p>
       <WorkoutDetailModal workout={open} onClose={() => setOpen(null)} audience="coach" />
     </div>
   )

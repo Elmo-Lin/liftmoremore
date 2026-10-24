@@ -52,6 +52,12 @@ public class StudioController {
         studios.deactivate(user, id, in == null ? null : in.transferTo());
     }
 
+    /** A studio coach leaves to become a free coach; their students stay with the studio. Returns their new token. */
+    @PostMapping("/studio/leave")
+    public AuthResponse leave(CurrentUser user) {
+        return studios.leave(user);
+    }
+
     @PutMapping("/students/{id}/coach")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void transfer(CurrentUser user, @PathVariable String id, @Valid @RequestBody TransferStudentInput in) {

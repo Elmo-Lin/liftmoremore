@@ -357,8 +357,8 @@ class BillingFlowTests {
         assertThat(b.get("status").asString()).isEqualTo("trialing");
         assertThat(b.get("monthlyAmount").asInt()).isEqualTo(99);
         assertThat(b.get("canManage").asBoolean()).isTrue();
-        assertThat(call(post("/api/billing/change"), self, Map.of("plan", "pro", "extraStudentPacks", 1, "extraCoachSeats", 0)).body().get("code").asString())
-                .as("no add-ons or plan changes").isEqualTo("nothing_to_change");
+        assertThat(call(post("/api/billing/change"), self, Map.of("plan", "team", "extraStudentPacks", 1, "extraCoachSeats", 0)).body().get("code").asString())
+                .as("no add-ons; the only change is becoming a free coach (Pro)").isEqualTo("nothing_to_change");
 
         Coach space = db.get(db.doc(Db.COACHES, selfId), Coach.class).orElseThrow();
         space.subscription.trialEndsAt = Instant.now().minusSeconds(60);
@@ -376,6 +376,135 @@ class BillingFlowTests {
         Resp back = periodCallback("/api/billing/newebpay/period-return", "SUCCESS", sent.get("MerOrderNo"), "PS" + suffix, null, 99);
         assertThat(back.location()).endsWith("/billing?result=success");
         assertThat(call(put("/api/workouts/wo_selfpay" + suffix), self, workout).status()).isEqualTo(200);
+    }
+
+    // ------------------------------------------------------------------ switching plan type
+
+    String registerSelf() throws Exception {
+        return call(post("/api/auth/register-self"), null, Map.of("name", "自練者", "email", "selfsw-" + suffix + "@example.com", "password", "password123"))
+                .body().get("token").asString();
+    }
+
+    String[] registerStudio() throws Exception {
+        Resp r = call(post("/api/auth/register-studio"), null, Map.of("name", "館主", "email", "ownsw-" + suffix + "@example.com", "password", "password123", "studio", "測試館"));
+        return new String[] {r.body().get("token").asString(), r.body().get("user").get("userId").asString()};
+    }
+
+    String refreshed(String token) throws Exception {
+        return call(post("/api/auth/refresh"), token, null).body().get("token").asString();
+    }
+
+    String roleOf(String token) throws Exception {
+        return call(post("/api/auth/refresh"), token, null).body().get("user").get("role").asString();
+    }
+
+    @Test
+    void selfTrackersBecomeFreeCoachesKeepingTheirOwnTraining() throws Exception {
+        String self = registerSelf();
+        Resp r = call(post("/api/billing/change"), self, Map.of("plan", "pro", "extraStudentPacks", 0, "extraCoachSeats", 0));
+        assertThat(r.body().get("applied").asBoolean()).as("free during the trial").isTrue();
+        assertThat(roleOf(self)).isEqualTo("coach");
+        String coach = refreshed(self);
+        JsonNode boot = call(get("/api/bootstrap"), coach, null).body();
+        assertThat(boot.get("billing").get("plan").asString()).isEqualTo("pro");
+        assertThat(boot.get("billing").get("status").asString()).as("the trial carries on").isEqualTo("trialing");
+        assertThat(boot.get("students").size()).as("their own record is now a student").isEqualTo(1);
+        String own = boot.get("students").get(0).get("id").asString();
+        assertThat(call(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/students/" + own), coach, null).status())
+                .as("their own record cannot be deleted").isEqualTo(400);
+        assertThat(addStudent(coach, "first", "active").status()).as("and they can coach now").isEqualTo(201);
+    }
+
+    @Test
+    void paidSelfTrackersPayTheDifferenceToBecomeCoaches() throws Exception {
+        String self = registerSelf();
+        Resp checkout = call(post("/api/billing/subscribe"), self, Map.of("extraStudentPacks", 0, "extraCoachSeats", 0));
+        Map<String, String> sent = sentToNewebPay(checkout.body().get("fields").get("PostData_").asString());
+        periodCallback("/api/billing/newebpay/period-return", "SUCCESS", sent.get("MerOrderNo"), "PSW" + suffix, null, 99);
+
+        Resp up = call(post("/api/billing/change"), self, Map.of("plan", "pro", "extraStudentPacks", 0, "extraCoachSeats", 0));
+        Map<String, String> trade = sentToNewebPay(up.body().get("checkout").get("fields").get("TradeInfo").asString());
+        assertThat(Integer.parseInt(trade.get("Amt"))).as("about a month of 399 - 99").isBetween(290, 300);
+        String tradeInfo = newebPay.encrypt(json.writeValueAsString(Map.of("Status", "SUCCESS", "Result",
+                Map.of("MerchantID", "MS_TEST", "MerchantOrderNo", trade.get("MerchantOrderNo"), "Amt", Integer.parseInt(trade.get("Amt"))))));
+        form("/api/billing/newebpay/mpg-notify", Map.of("TradeInfo", tradeInfo, "TradeSha", newebPay.tradeSha(tradeInfo)));
+        assertThat(roleOf(self)).isEqualTo("coach");
+        verify(newebPay).alterAmount(anyString(), eq("PSW" + suffix), eq(399), any());
+    }
+
+    @Test
+    void studiosGoBackToFreeCoachOnceTheOtherCoachesAreGone() throws Exception {
+        String[] studio = registerStudio();
+        String owner = studio[0];
+        Resp inv = call(post("/api/studio/coaches"), owner, Map.of("name", "c1", "email", "swc1-" + suffix + "@example.com"));
+        String coachId = inv.body().get("coach").get("id").asString();
+        assertThat(call(post("/api/billing/downgrade"), owner, null).body().get("code").asString()).isEqualTo("coaches_remain");
+
+        call(post("/api/studio/coaches/" + coachId + "/deactivate"), owner, Map.of());
+        Resp down = call(post("/api/billing/downgrade"), owner, null);
+        assertThat(down.body().get("applied").asBoolean()).as("immediate during the trial").isTrue();
+        assertThat(roleOf(owner)).isEqualTo("coach");
+        JsonNode boot = call(get("/api/bootstrap"), refreshed(owner), null).body();
+        assertThat(boot.get("billing").get("plan").asString()).isEqualTo("pro");
+        assertThat(boot.get("studio").get("kind").asString()).isEqualTo("solo");
+    }
+
+    @Test
+    void paidStudiosSwitchToFreeCoachAtTheNextRenewal() throws Exception {
+        String[] studio = registerStudio();
+        String owner = studio[0];
+        coachId = studio[1];
+        Resp checkout = call(post("/api/billing/subscribe"), owner, Map.of("extraStudentPacks", 0, "extraCoachSeats", 0));
+        Map<String, String> sent = sentToNewebPay(checkout.body().get("fields").get("PostData_").asString());
+        String periodNo = "PST" + suffix;
+        periodCallback("/api/billing/newebpay/period-return", "SUCCESS", sent.get("MerOrderNo"), periodNo, null, 999);
+
+        Resp down = call(post("/api/billing/downgrade"), owner, null);
+        assertThat(down.body().get("applied").asBoolean()).as("scheduled, not now").isFalse();
+        verify(newebPay).alterAmount(anyString(), eq(periodNo), eq(399), any());
+        JsonNode b = billing(owner);
+        assertThat(b.get("plan").asString()).as("Team until the period ends").isEqualTo("team");
+        assertThat(b.get("nextPlan").asString()).isEqualTo("pro");
+        assertThat(call(post("/api/studio/coaches"), owner, Map.of("name", "c9", "email", "swc9-" + suffix + "@example.com")).body().get("code").asString())
+                .as("no new coaches while leaving the studio plan").isEqualTo("downgrade_scheduled");
+
+        assertThat(call(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/billing/downgrade"), owner, null).status()).isEqualTo(204);
+        assertThat(billing(owner).has("nextPlan")).as("changed their mind").isFalse();
+        verify(newebPay).alterAmount(anyString(), eq(periodNo), eq(999), any());
+
+        call(post("/api/billing/downgrade"), owner, null);
+        periodCallback("/api/billing/newebpay/period-notify", "SUCCESS", sent.get("MerOrderNo"), periodNo, 2, 399);
+        assertThat(roleOf(owner)).isEqualTo("coach");
+        JsonNode after = call(get("/api/bootstrap"), refreshed(owner), null).body();
+        assertThat(after.get("billing").get("plan").asString()).isEqualTo("pro");
+        assertThat(after.get("billing").has("nextPlan")).isFalse();
+    }
+
+    @Test
+    void studioCoachesLeaveAndTheirStudentsStay() throws Exception {
+        String[] studio = registerStudio();
+        String owner = studio[0];
+        Resp inv = call(post("/api/studio/coaches"), owner, Map.of("name", "leaver", "email", "leaver-" + suffix + "@example.com"));
+        String code = inv.body().get("inviteCode").asString();
+        String leaver = call(post("/api/auth/activate"), null, Map.of("inviteCode", code, "password", "coach12345")).body().get("token").asString();
+        String sid = addStudent(leaver, "kept", "active").body().get("id").asString();
+        assertThat(call(post("/api/studio/leave"), owner, null).status()).as("owners cannot leave their own studio").isEqualTo(403);
+
+        Resp left = call(post("/api/studio/leave"), leaver, null);
+        assertThat(left.status()).isEqualTo(200);
+        String free = left.body().get("token").asString();
+        JsonNode mine = call(get("/api/bootstrap"), free, null).body();
+        assertThat(mine.get("students").size()).as("a fresh, empty workspace").isZero();
+        assertThat(mine.get("billing").get("status").asString()).isEqualTo("trialing");
+        assertThat(mine.get("billing").get("plan").asString()).isEqualTo("pro");
+        assertThat(call(get("/api/bootstrap"), leaver, null).status()).as("the old studio token stops working").isEqualTo(401);
+
+        JsonNode studioBoot = call(get("/api/bootstrap"), owner, null).body();
+        assertThat(studioBoot.get("students").toString()).contains(sid);
+        String coachOfStudent = null;
+        for (JsonNode rel : studioBoot.get("relationships")) if (rel.get("studentId").asString().equals(sid)) coachOfStudent = rel.get("coachId").asString();
+        assertThat(coachOfStudent).as("now the owner's").isEqualTo(studio[1]);
+        assertThat(studioBoot.get("studio").get("coaches").toString()).doesNotContain("leaver-" + suffix);
     }
 
     @Test

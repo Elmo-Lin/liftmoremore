@@ -91,6 +91,7 @@ function UpgradeToStudio() {
             </Button>
             {!isApiMode && <p className="text-center text-xs text-ink-500">示範模式無法升級。可從「切換示範身分」改看「經營者」，體驗工作室的功能。</p>}
             {data.billing?.status === 'trialing' && <p className="text-center text-xs text-ink-500">試用期間升級免費，試用結束後依 Team 方案計費。</p>}
+          {data.billing && <p className="text-center text-xs text-ink-500">還沒有其他教練加入前，可以隨時在「方案與付款」改回自由教練。</p>}
           </form>
         )}
       </Card>

@@ -264,6 +264,8 @@ export interface Billing {
   /** Downgrades that take effect at the next renewal. */
   nextExtraStudentPacks?: number
   nextExtraCoachSeats?: number
+  /** 'pro': the studio becomes a free coach at the next renewal. */
+  nextPlan?: PlanId
   monthlyAmount: number
   studentLimit: number
   coachLimit: number

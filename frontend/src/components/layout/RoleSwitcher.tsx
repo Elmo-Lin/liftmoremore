@@ -1,7 +1,8 @@
-import { ArrowLeftRight, Building2, CreditCard, LogOut, RotateCcw } from 'lucide-react'
+import { ArrowLeftRight, Building2, CreditCard, DoorOpen, LogOut, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { enterLocalDemo, exitLocalDemo, isApiMode, isLocalDemo } from '../../api/client'
+import { leaveStudio } from '../../api/studio'
 import { demoHome, demoPersonaOf, demoPersonaTitle, demoSession, type DemoPersona } from '../../data/mock'
 import { billingPath } from '../../lib/billing'
 import { isCoachRole, ROLE_LABEL } from '../../lib/roles'
@@ -22,7 +23,7 @@ export function RoleSwitcher({ placement }: { placement: Placement }) {
 /** Who is signed in (and where), the studio page for coaches who run one or could, and sign-out. */
 function AccountMenu({ placement }: { placement: Placement }) {
   const { data } = useData()
-  const { session, signOut } = useSession()
+  const { session, signIn, signOut } = useSession()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const role = session?.role
@@ -35,6 +36,25 @@ function AccountMenu({ placement }: { placement: Placement }) {
   const where = asCoach && inStudio ? data.studio?.name : undefined
   const label = role === 'coach' && !inStudio ? '自由教練' : role ? ROLE_LABEL[role] : ''
   const studioLink = role === 'owner' ? '工作室管理' : role === 'coach' && !inStudio ? '升級為工作室' : null
+  const studioCoach = role === 'coach' && inStudio
+  const notify = useToast()
+  const [confirmLeave, setConfirmLeave] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+  const leave = async () => {
+    if (!session?.token) return
+    setConfirmLeave(false)
+    setLeaving(true)
+    try {
+      signIn(await leaveStudio(session.token))
+      setOpen(false)
+      navigate('/coach')
+      notify('已退出工作室，現在是自由教練（免費試用 10 天）')
+    } catch (e) {
+      notify(e instanceof Error ? e.message : '退出失敗', 'error')
+    } finally {
+      setLeaving(false)
+    }
+  }
   const logOut = () => {
     signOut()
     navigate('/login')
@@ -91,7 +111,7 @@ function AccountMenu({ placement }: { placement: Placement }) {
           </>
         }
       >
-        {studioLink || data.billing ? (
+        {studioLink || data.billing || studioCoach ? (
           <div className="space-y-2">
             {studioLink && (
               <Button variant="secondary" icon={Building2} className="h-11 w-full" onClick={goStudio}>
@@ -103,11 +123,25 @@ function AccountMenu({ placement }: { placement: Placement }) {
                 方案與付款
               </Button>
             )}
+            {studioCoach && (
+              <Button variant="secondary" icon={DoorOpen} className="h-11 w-full" disabled={leaving} onClick={() => setConfirmLeave(true)}>
+                {leaving ? '處理中…' : '退出工作室'}
+              </Button>
+            )}
           </div>
         ) : (
           <p className="text-sm text-ink-600">登出後，下次需要用 Email 或 Google 登入。</p>
         )}
       </Modal>
+      <ConfirmDialog
+        open={confirmLeave}
+        title={`退出「${data.studio?.name || '工作室'}」？`}
+        description={`你會改成自己的自由教練帳號（免費試用 10 天），登入方式不變。你帶的 ${data.students.length} 位學員會留在工作室，由經營者接手，訓練紀錄與堂數都保留。退出後無法自行回到工作室。`}
+        confirmLabel="退出工作室"
+        tone="danger"
+        onCancel={() => setConfirmLeave(false)}
+        onConfirm={() => void leave()}
+      />
     </>
   )
 }

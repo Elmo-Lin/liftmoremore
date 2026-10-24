@@ -16,7 +16,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 /**
  * Read-only mode: once a workspace's trial or paid period lapses, every write in it is refused
  * (402 subscription_required) until someone subscribes. Reads keep working and nothing is deleted.
- * Signing in and billing itself stay open.
+ * Signing in, billing itself, and a coach leaving a studio stay open.
  */
 @Configuration
 public class WriteGuard implements WebMvcConfigurer, HandlerInterceptor {
@@ -33,7 +33,7 @@ public class WriteGuard implements WebMvcConfigurer, HandlerInterceptor {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(this)
                 .addPathPatterns("/api/**")
-                .excludePathPatterns("/api/auth/**", "/api/billing/**", "/api/demo/**", "/api/health");
+                .excludePathPatterns("/api/auth/**", "/api/billing/**", "/api/demo/**", "/api/health", "/api/studio/leave");
     }
 
     @Override

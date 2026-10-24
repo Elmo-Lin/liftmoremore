@@ -204,6 +204,8 @@ public final class Dtos {
             int extraCoachSeats,
             Integer nextExtraStudentPacks,
             Integer nextExtraCoachSeats,
+            /** pro: the studio becomes a free coach at the next renewal. */
+            String nextPlan,
             int monthlyAmount,
             int studentLimit,
             int coachLimit,

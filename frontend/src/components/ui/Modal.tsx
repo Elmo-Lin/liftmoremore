@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from './Button'
 
@@ -18,6 +18,23 @@ const widths = { sm: 'md:max-w-md', md: 'md:max-w-lg', lg: 'md:max-w-2xl' }
 // Stack of open dialogs so Escape only closes the topmost one.
 const openStack: symbol[] = []
 
+// Page scroll is locked while any dialog is open. A counter, not a per-dialog save/restore: with two
+// dialogs closing in the other order, restoring each one's saved value left the page stuck unscrollable.
+let scrollLocks = 0
+let savedOverflow = ''
+function lockScroll() {
+  if (scrollLocks++ === 0) {
+    savedOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+  }
+}
+function unlockScroll() {
+  if (scrollLocks > 0 && --scrollLocks === 0) document.body.style.overflow = savedOverflow
+}
+
+/** Mouse or trackpad. On touch screens, focusing a field pops the keyboard up, so dialogs don't. */
+const finePointer = () => window.matchMedia?.('(pointer: fine)').matches ?? true
+
 /** Dialog on desktop, bottom sheet on mobile. */
 export function Modal({ open, onClose, title, description, children, footer, size = 'md' }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null)
@@ -25,6 +42,17 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   useEffect(() => {
     onCloseRef.current = onClose
   })
+
+  // Release focus from a field inside the dialog before it is removed: on iPhone, removing a focused
+  // field leaves the page shifted by the keyboard and unresponsive to scrolling until the next tap.
+  useLayoutEffect(() => {
+    if (!open) return
+    const panel = panelRef.current
+    return () => {
+      const active = document.activeElement as HTMLElement | null
+      if (active && panel?.contains(active)) active.blur()
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -35,18 +63,19 @@ export function Modal({ open, onClose, title, description, children, footer, siz
       if (e.key === 'Escape' && openStack[openStack.length - 1] === token) onCloseRef.current()
     }
     document.addEventListener('keydown', onKey)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    lockScroll()
+    const fine = finePointer()
     const t = setTimeout(() => {
-      const el = panelRef.current?.querySelector<HTMLElement>('[data-autofocus], input, select, textarea')
-      ;(el ?? panelRef.current)?.focus()
+      const el = fine ? panelRef.current?.querySelector<HTMLElement>('[data-autofocus], input, select, textarea') : null
+      ;(el ?? panelRef.current)?.focus({ preventScroll: true })
     }, 30)
     return () => {
       clearTimeout(t)
       openStack.splice(openStack.indexOf(token), 1)
       document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prevOverflow
-      prevFocus?.focus?.()
+      unlockScroll()
+      // Back to where keyboard users were; on touch screens that could pop the keyboard up again.
+      if (fine) prevFocus?.focus?.({ preventScroll: true })
     }
   }, [open])
 

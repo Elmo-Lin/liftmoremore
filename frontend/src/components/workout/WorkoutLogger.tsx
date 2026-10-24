@@ -23,11 +23,13 @@ import { inputClass, SelectInput, TextArea } from '../ui/Form'
 import { ConfirmDialog } from '../ui/Modal'
 import { Avatar, Badge, Card, EmptyState } from '../ui/Primitives'
 import { DeductSessionDialog } from './DeductSessionDialog'
+import { DeleteDraftButton } from './DraftsCard'
 import { ExerciseCard, type SetSuggestion } from './ExerciseCard'
 import { ExercisePicker } from './ExercisePicker'
 
 function emptyWorkout(studentId: ID, mode: Role, coachId: ID): WorkoutSession {
-  const now = new Date().toISOString()
+  const today = new Date()
+  const now = today.toISOString()
   return {
     id: uid('wo'),
     studentId,
@@ -35,7 +37,8 @@ function emptyWorkout(studentId: ID, mode: Role, coachId: ID): WorkoutSession {
     type: mode === 'coach' ? 'coached' : 'independent',
     createdBy: mode,
     status: 'draft',
-    title: '自由訓練',
+    // Today's date by default (e.g. "10/24 訓練"); workouts started from a plan use the day's name.
+    title: `${today.getMonth() + 1}/${today.getDate()} 訓練`,
     startedAt: now,
     updatedAt: now,
     exercises: [],
@@ -169,6 +172,8 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
     if (!res.ok) return notify(res.error, 'error')
     setLastSaved(res.value.updatedAt)
     notify('草稿已儲存，可隨時回來繼續')
+    // Same place finishing goes; the draft waits at the top of that history list.
+    navigate(mode === 'coach' ? `/coach/students/${workout.studentId}?tab=history` : '/student/history')
   }
 
   const requestFinish = () => {
@@ -237,6 +242,7 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
                         {relativeDay(d.startedAt)} {formatTime(d.startedAt)} 開始・已完成 {done} 組
                       </p>
                     </div>
+                    <DeleteDraftButton draft={d} />
                     <Button
                       size="sm"
                       onClick={() => {

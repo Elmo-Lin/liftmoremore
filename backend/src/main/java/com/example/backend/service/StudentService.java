@@ -114,6 +114,8 @@ public class StudentService {
 
     /** Deletes the student and everything that belongs to them. */
     public void delete(CurrentUser user, String id) {
+        // A coach who started as a self-tracker keeps their own training as a student record; it is their account.
+        if (id.equals(user.userId())) throw ApiException.badRequest("這是你自己的訓練紀錄，無法刪除");
         Student s = access.coachStudent(user, id);
         BulkWriter writer = db.fs.bulkWriter();
         for (String col : List.of(Db.WORKOUTS, Db.PACKAGES, Db.TRANSACTIONS, Db.METRICS, Db.APPOINTMENTS)) {

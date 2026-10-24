@@ -2,6 +2,7 @@ import { History } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Segmented, ToolbarSelect } from '../../components/ui/Form'
 import { Card, EmptyState, PageHeader, Tabs } from '../../components/ui/Primitives'
+import { DraftsCard } from '../../components/workout/DraftsCard'
 import { WorkoutDetailModal, WorkoutRow } from '../../components/workout/WorkoutDetail'
 import { addDays, formatDate } from '../../lib/format'
 import { completedSets, exerciseSeries, workoutDate } from '../../lib/stats'
@@ -46,6 +47,7 @@ export function StudentHistoryPage() {
             : `共 ${all.length} 次訓練・教練課 ${all.filter((w) => w.type === 'coached').length} 次・自主訓練 ${all.filter((w) => w.type === 'independent').length} 次`
         }
       />
+      <DraftsCard studentId={student.id} createdBy="student" loggerPath="/student/workouts/new" className="mb-4" />
       <Tabs
         value={view}
         onChange={setView}

@@ -167,6 +167,8 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
     },
 
     deleteStudent(id: ID): Result {
+      // A coach who started as a self-tracker keeps their own training as a student record (same ID as their workspace).
+      if (id === get().coach.id) return fail('這是你自己的訓練紀錄，無法刪除')
       update((d) => ({
         ...d,
         students: d.students.filter((s) => s.id !== id),
