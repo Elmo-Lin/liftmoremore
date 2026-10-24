@@ -247,7 +247,7 @@ function AppointmentRow({
         {a.status !== 'scheduled' && <Badge tone={cancelled ? 'neutral' : 'accent'}>{STATUS_LABEL[a.status]}</Badge>}
       </button>
       {showStart && a.status === 'scheduled' && s && (
-        <ButtonLink to={`/coach/workouts/new?student=${s.id}`} variant="secondary" size="sm" icon={Play} aria-label={`開始記錄 ${s.name}`}>
+        <ButtonLink to={`/coach/workouts/new?student=${s.id}&appointment=${a.id}`} variant="secondary" size="sm" icon={Play} aria-label={`開始記錄 ${s.name}`}>
           <span className="hidden sm:inline">開始</span>
         </ButtonLink>
       )}

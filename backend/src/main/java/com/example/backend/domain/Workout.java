@@ -18,6 +18,8 @@ public class Workout {
     public String title;
     public String planId;
     public String trainingDayId;
+    /** The scheduled class this coached session was logged for. */
+    public String appointmentId;
     public Instant startedAt;
     public Instant completedAt;
     public Instant updatedAt;

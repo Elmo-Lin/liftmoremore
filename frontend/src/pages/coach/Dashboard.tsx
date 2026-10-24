@@ -30,7 +30,7 @@ export function CoachDashboardPage() {
 
   const active = data.students.filter((s) => s.status === 'active')
   const todays = data.appointments
-    .filter((a) => a.status === 'scheduled' && isSameDay(a.startAt, now))
+    .filter((a) => a.status !== 'cancelled' && isSameDay(a.startAt, now))
     .sort((a, b) => a.startAt.localeCompare(b.startAt))
   const completed = selectCompleted(data)
   const monthCoached = completed.filter((w) => {
@@ -126,9 +126,10 @@ export function CoachDashboardPage() {
                 if (!s) return null
                 const plan = selectPlan(data, s.activePlanId)
                 const day = plan ? planMenu(plan) : undefined
-                const done = todayDone.some((w) => w.studentId === s.id)
+                // Finishing the class's workout marks the class completed.
+                const done = a.status === 'completed'
                 const bal = selectBalance(data, s.id)
-                const href = `/coach/workouts/new?student=${s.id}`
+                const href = `/coach/workouts/new?student=${s.id}&appointment=${a.id}`
                 return (
                   <li key={a.id} className="flex items-center gap-3 px-5 py-3">
                     <span className="tabular w-12 shrink-0 text-sm font-semibold text-ink-800">{formatTime(a.startAt)}</span>

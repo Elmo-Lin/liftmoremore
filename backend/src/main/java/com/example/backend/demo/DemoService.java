@@ -145,6 +145,7 @@ public class DemoService {
             wo.title = in.title();
             wo.planId = in.planId();
             wo.trainingDayId = in.trainingDayId();
+            wo.appointmentId = in.appointmentId();
             wo.startedAt = in.startedAt();
             wo.completedAt = in.completedAt();
             wo.updatedAt = in.updatedAt() != null ? in.updatedAt() : in.startedAt();

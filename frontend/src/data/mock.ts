@@ -21,7 +21,8 @@ import type {
 } from '../types'
 import { EXERCISES, REFERENCE_WEIGHT } from './exercises'
 
-export const SCHEMA_VERSION = 1
+/** Bump to regenerate demo data already saved in visitors' browsers (e.g. after reshaping the samples). */
+export const SCHEMA_VERSION = 2
 export const COACH_ID = 'coach_lin'
 export const DEFAULT_DEMO_STUDENT_ID = 'stu_01'
 /** The demo is a studio: Stone owns it, and Mia teaches the students below. */
@@ -442,20 +443,22 @@ function soloFrom(studio: AppData): AppData {
   }
 }
 
-/** A self-tracker: one person's history, all self-logged; no coach, sessions, bookings or plans. */
+/** A self-tracker: one person's history, all self-logged, with their own plans; no coach, sessions or bookings. */
 function selfFrom(studio: AppData): AppData {
   const d = onlyStudents(studio, (id) => id === SELF_SOURCE)
   const src = d.students[0]
   const rename = <T extends { studentId: ID }>(x: T) => ({ ...x, studentId: SELF_ID })
+  // The plans this history was trained from become plans Ruby wrote for herself.
+  const used = new Set(d.workouts.filter((w) => w.status === 'completed').map((w) => w.planId))
   return {
     ...d,
     coach: { ...d.coach, id: SELF_ID, name: 'Ruby Wang', email: 'ruby.wang@example.com', phone: undefined, title: '', studio: '' },
     students: [{ ...src, id: SELF_ID, name: 'Ruby Wang', email: 'ruby.wang@example.com', gender: 'female', activePlanId: undefined, coachNotes: '' }],
     relationships: [{ id: `rel_${SELF_ID}`, coachId: SELF_ID, studentId: SELF_ID, status: 'active', startedAt: src.joinedAt }],
-    plans: [],
+    plans: d.plans.filter((p) => used.has(p.id)).map((p) => ({ ...p, coachId: SELF_ID })),
     workouts: d.workouts
       .filter((w) => w.status === 'completed')
-      .map((w) => ({ ...rename(w), type: 'independent' as const, createdBy: 'student' as const, coachId: undefined, planId: undefined, trainingDayId: undefined })),
+      .map((w) => ({ ...rename(w), type: 'independent' as const, createdBy: 'student' as const, coachId: undefined })),
     packages: [],
     transactions: [],
     metrics: d.metrics.map(rename),

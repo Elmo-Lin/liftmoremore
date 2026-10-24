@@ -4,6 +4,7 @@ import com.example.backend.auth.CurrentUser;
 import com.example.backend.common.ApiException;
 import com.example.backend.common.Domain;
 import com.example.backend.common.Ids;
+import com.example.backend.domain.Appointment;
 import com.example.backend.domain.SessionTransaction;
 import com.example.backend.domain.Student;
 import com.example.backend.domain.Workout;
@@ -21,7 +22,8 @@ import org.springframework.stereotype.Service;
 
 /**
  * Workout logging. Saving a workout NEVER touches session balances — billing is a separate,
- * explicit action in {@link BillingService#deduct}.
+ * explicit action in {@link BillingService#deduct}. A coached session belongs to one scheduled
+ * class: finishing it marks the class completed, and a class holds at most one workout.
  */
 @Service
 public class WorkoutService {
@@ -71,10 +73,21 @@ public class WorkoutService {
             throw ApiException.badRequest("請至少完成一組再結束訓練");
         }
         validateExercises(user.coachId(), in.exercises());
+        String appointmentId = "coached".equals(in.type()) && in.appointmentId() != null && !in.appointmentId().isBlank() ? in.appointmentId() : null;
 
         var ref = db.coachDoc(user.coachId(), Db.WORKOUTS, workoutId);
+        var apptRef = appointmentId == null ? null : db.coachDoc(user.coachId(), Db.APPOINTMENTS, appointmentId);
         return db.transaction(tx -> {
             Workout existing = tx.get(ref, Workout.class).orElse(null);
+            Appointment appt = null;
+            if (apptRef != null) {
+                appt = tx.get(apptRef, Appointment.class).orElseThrow(() -> ApiException.badRequest("找不到這堂課"));
+                if (!appt.studentId.equals(student.id)) throw ApiException.badRequest("這堂課不是此學員的");
+                if ("cancelled".equals(appt.status)) throw ApiException.badRequest("這堂課已取消");
+                boolean taken = tx.list(db.coachCol(user.coachId(), Db.WORKOUTS).whereEqualTo("appointmentId", appointmentId), Workout.class).stream()
+                        .anyMatch(o -> !o.id.equals(workoutId));
+                if (taken) throw ApiException.conflict("class_logged", "這堂課已經有訓練紀錄");
+            }
             if (existing != null) {
                 if (user.isStudent() && (!existing.studentId.equals(user.userId()) || !Domain.STUDENT.equals(existing.createdBy))) {
                     throw ApiException.forbidden("無法修改教練記錄的課程");
@@ -100,6 +113,7 @@ public class WorkoutService {
             w.title = in.title() == null || in.title().isBlank() ? "自由訓練" : in.title().trim();
             w.planId = in.planId();
             w.trainingDayId = in.trainingDayId();
+            w.appointmentId = appointmentId;
             w.startedAt = in.startedAt();
             w.completedAt = completed ? (in.completedAt() != null ? in.completedAt() : now) : null;
             w.updatedAt = now;
@@ -109,6 +123,7 @@ public class WorkoutService {
                 w.exercises.add(Mapper.logDoc(new ExerciseLogDto(l.id(), l.exerciseId(), sets, l.notes()), Ids.orNew(l.id(), "el")));
             }
             tx.set(ref, w);
+            if (completed && appt != null && "scheduled".equals(appt.status)) tx.update(apptRef, "status", "completed");
             return Mapper.workout(w);
         });
     }
@@ -124,7 +139,11 @@ public class WorkoutService {
             requireVisible(user, w.studentId);
             List<SessionTransaction> linked = tx.list(db.coachCol(user.coachId(), Db.TRANSACTIONS).whereEqualTo("workoutId", id), SessionTransaction.class);
             if (Ledger.netForWorkout(id, linked) < 0) throw ApiException.conflict("already_deducted", "此課程已扣堂，請先撤銷扣堂再刪除");
+            // The class is no longer logged: back on the schedule as not yet done.
+            var apptRef = w.appointmentId == null ? null : db.coachDoc(user.coachId(), Db.APPOINTMENTS, w.appointmentId);
+            Appointment appt = apptRef == null ? null : tx.get(apptRef, Appointment.class).orElse(null);
             tx.delete(ref);
+            if (appt != null && "completed".equals(appt.status)) tx.update(apptRef, "status", "scheduled");
             return null;
         });
     }

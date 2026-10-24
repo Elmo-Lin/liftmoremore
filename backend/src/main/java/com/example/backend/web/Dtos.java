@@ -118,6 +118,8 @@ public final class Dtos {
             @Size(max = 60) String title,
             String planId,
             String trainingDayId,
+            /** The scheduled class a coached session belongs to. */
+            String appointmentId,
             @NotNull Instant startedAt,
             Instant completedAt,
             Instant updatedAt,

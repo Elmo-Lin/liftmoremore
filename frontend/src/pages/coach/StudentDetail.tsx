@@ -295,7 +295,7 @@ function Overview({ student, onTab, pending }: { student: Student; onTab: (t: Ta
         </Card>
 
         <Card className="p-5">
-          <p className="text-[13px] text-ink-500">下次課程（示範排程）</p>
+          <p className="text-[13px] text-ink-500">下次課程</p>
           {next ? (
             <p className="mt-1 flex items-center gap-2 text-[15px] font-medium text-ink-900">
               <CalendarDays className="size-4 text-ink-400" />

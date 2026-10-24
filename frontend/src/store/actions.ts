@@ -342,10 +342,23 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
         const hasSet = workout.exercises.some((e) => e.sets.some((s) => s.completed))
         if (!hasSet) return fail('請至少完成一組再結束訓練')
       }
-      const saved = { ...workout, updatedAt: nowISO() }
+      // A class holds one workout; finishing it marks the class done.
+      const classId = workout.type === 'coached' ? workout.appointmentId : undefined
+      if (classId) {
+        const appt = d.appointments.find((a) => a.id === classId)
+        if (!appt) return fail('找不到這堂課')
+        if (appt.studentId !== workout.studentId) return fail('這堂課不是此學員的')
+        if (appt.status === 'cancelled') return fail('這堂課已取消')
+        if (d.workouts.some((w) => w.appointmentId === classId && w.id !== workout.id)) return fail('這堂課已經有訓練紀錄')
+      }
+      const saved = { ...workout, appointmentId: classId, updatedAt: nowISO() }
       update((d) => ({
         ...d,
         workouts: existing ? d.workouts.map((w) => (w.id === saved.id ? saved : w)) : [...d.workouts, saved],
+        appointments:
+          classId && saved.status === 'completed'
+            ? d.appointments.map((a) => (a.id === classId && a.status === 'scheduled' ? { ...a, status: 'completed' as const } : a))
+            : d.appointments,
       }))
       return ok(saved)
     },
@@ -353,7 +366,13 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
     deleteWorkout(id: ID): Result {
       const d = get()
       if (deductionFor(id, d.transactions)) return fail('此課程已扣堂，請先撤銷扣堂再刪除')
-      update((d) => ({ ...d, workouts: d.workouts.filter((w) => w.id !== id) }))
+      // The class is no longer logged: back on the schedule as not yet done.
+      const classId = d.workouts.find((w) => w.id === id)?.appointmentId
+      update((d) => ({
+        ...d,
+        workouts: d.workouts.filter((w) => w.id !== id),
+        appointments: d.appointments.map((a) => (a.id === classId && a.status === 'completed' ? { ...a, status: 'scheduled' as const } : a)),
+      }))
       return ok(undefined)
     },
 

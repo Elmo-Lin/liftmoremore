@@ -259,6 +259,37 @@ class ApiIntegrationTests {
     }
 
     @Test
+    void aCoachedSessionBelongsToOneScheduledClass() throws Exception {
+        String sid = createStudent(coach, "cls");
+        String other = createStudent(coach, "cls2");
+        String apt = "apt_c" + suffix;
+        call(put("/api/appointments/" + apt), coach, Map.of("studentId", sid, "startAt", Instant.now().toString(), "durationMin", 60, "location", "工作室"));
+
+        Map<String, Object> draft = new java.util.HashMap<>(workout(sid, "coached", "draft"));
+        draft.put("appointmentId", apt);
+        assertThat(call(put("/api/workouts/wo_c1" + suffix), coach, draft).status()).isEqualTo(200);
+        assertThat(call(put("/api/workouts/wo_c2" + suffix), coach, draft).status()).as("one workout per class").isEqualTo(409);
+        Map<String, Object> wrong = new java.util.HashMap<>(workout(other, "coached", "draft"));
+        wrong.put("appointmentId", apt);
+        assertThat(call(put("/api/workouts/wo_c3" + suffix), coach, wrong).status()).as("someone else's class").isEqualTo(400);
+
+        Map<String, Object> done = new java.util.HashMap<>(workout(sid, "coached", "completed"));
+        done.put("appointmentId", apt);
+        assertThat(call(put("/api/workouts/wo_c1" + suffix), coach, done).body().get("appointmentId").asString()).isEqualTo(apt);
+        java.util.function.Supplier<String> status = () -> {
+            try {
+                for (JsonNode a : call(get("/api/appointments"), coach, null).body()) if (a.get("id").asString().equals(apt)) return a.get("status").asString();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            return null;
+        };
+        assertThat(status.get()).as("finishing the workout completes the class").isEqualTo("completed");
+        assertThat(call(delete("/api/workouts/wo_c1" + suffix), coach, null).status()).isEqualTo(204);
+        assertThat(status.get()).as("deleting it puts the class back").isEqualTo("scheduled");
+    }
+
+    @Test
     void deductionsUseOldestPackageFirst() throws Exception {
         String sid = createStudent(coach, "eve");
         Resp older = call(post("/api/students/" + sid + "/packages"), coach,

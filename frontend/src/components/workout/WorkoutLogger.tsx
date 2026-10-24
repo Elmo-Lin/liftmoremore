@@ -1,4 +1,6 @@
 import {
+  CalendarClock,
+  CalendarPlus,
   Check,
   CircleCheck,
   ClipboardList,
@@ -9,20 +11,21 @@ import {
   Plus,
   Save,
   Trash2,
+  type LucideIcon,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { durationMin, formatDate, formatTime, relativeDay } from '../../lib/format'
+import { durationMin, formatDate, formatTime, isSameDay, relativeDay } from '../../lib/format'
 import { uid } from '../../lib/id'
 import { LOW_BALANCE_THRESHOLD } from '../../lib/sessions'
 import { lastExerciseLog, workoutDate } from '../../lib/stats'
 import { planMenu } from '../../lib/plans'
 import { useData, useToast } from '../../store/contexts'
 import { selectBalance, selectCompleted, selectDrafts, selectPlan, selectStudent, useExerciseMap, useIsSelf } from '../../store/selectors'
-import type { ExerciseLog, ExercisePrescription, ID, Role, TrainingDay, TrainingPlan, WorkoutSession } from '../../types'
+import type { AppData, Appointment, ExerciseLog, ExercisePrescription, ID, Role, TrainingDay, TrainingPlan, WorkoutSession } from '../../types'
 import { Button } from '../ui/Button'
 import { inputClass, SelectInput, TextArea } from '../ui/Form'
-import { ConfirmDialog } from '../ui/Modal'
+import { ConfirmDialog, Modal } from '../ui/Modal'
 import { Avatar, Badge, Card, EmptyState } from '../ui/Primitives'
 import { DeductSessionDialog } from './DeductSessionDialog'
 import { DeleteDraftButton } from './DraftsCard'
@@ -31,6 +34,9 @@ import { ExercisePicker } from './ExercisePicker'
 
 /** Plans shown as cards when starting a workout; the rest are in a dropdown. */
 const PLAN_CARDS = 6
+
+/** e.g. "10/24 訓練": the default name of a workout not started from a plan. */
+const defaultTitle = (d: Date) => `${d.getMonth() + 1}/${d.getDate()} 訓練`
 
 function emptyWorkout(studentId: ID, mode: Role, coachId: ID): WorkoutSession {
   const today = new Date()
@@ -42,8 +48,8 @@ function emptyWorkout(studentId: ID, mode: Role, coachId: ID): WorkoutSession {
     type: mode === 'coach' ? 'coached' : 'independent',
     createdBy: mode,
     status: 'draft',
-    // Today's date by default (e.g. "10/24 訓練"); workouts started from plans use their names.
-    title: `${today.getMonth() + 1}/${today.getDate()} 訓練`,
+    // Today's date by default; workouts started from plans use their names.
+    title: defaultTitle(today),
     startedAt: now,
     updatedAt: now,
     exercises: [],
@@ -67,6 +73,41 @@ function copyLogs(logs: ExerciseLog[]): ExerciseLog[] {
       .filter((s) => s.completed)
       .map((s) => ({ id: uid('set'), weightKg: s.weightKg, reps: s.reps, rpe: null, completed: false })),
   }))
+}
+
+const DAY_MS = 86_400_000
+
+interface OpenClass {
+  appt: Appointment
+  /** Already being logged. */
+  draft?: WorkoutSession
+}
+
+/** Classes a coached session can be logged for: still scheduled, from the past two weeks to tomorrow, nearest first. */
+function openClasses(d: AppData, studentId: ID, now: Date): OpenClass[] {
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+  const from = today.getTime() - 14 * DAY_MS
+  const to = today.getTime() + 2 * DAY_MS
+  const at = (a: Appointment) => new Date(a.startAt).getTime()
+  return d.appointments
+    .filter((a) => a.studentId === studentId && a.status === 'scheduled' && at(a) >= from && at(a) < to)
+    .filter((a) => !d.workouts.some((w) => w.appointmentId === a.id && w.status === 'completed'))
+    .map((a) => ({ appt: a, draft: d.workouts.find((w) => w.appointmentId === a.id && w.status === 'draft') }))
+    .sort((x, y) => Math.abs(at(x.appt) - now.getTime()) - Math.abs(at(y.appt) - now.getTime()))
+}
+
+/** Ties a new workout to its class; a class from an earlier day is logged on that day. */
+function forClass(w: WorkoutSession, a: Appointment): WorkoutSession {
+  const today = new Date()
+  if (isSameDay(a.startAt, today) || new Date(a.startAt) > today) return { ...w, appointmentId: a.id }
+  return { ...w, appointmentId: a.id, startedAt: a.startAt, title: w.title === defaultTitle(today) ? defaultTitle(new Date(a.startAt)) : w.title }
+}
+
+/** Where an unscheduled class probably took place: the student's last class, else the coach's. */
+function lastLocation(d: AppData, studentId: ID) {
+  const recent = [...d.appointments].sort((a, b) => b.startAt.localeCompare(a.startAt))
+  return (recent.find((a) => a.studentId === studentId) ?? recent[0])?.location || '未指定地點'
 }
 
 function useNow(intervalMs: number) {
@@ -97,7 +138,9 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
     if (draft && (!fixedStudentId || draft.studentId === fixedStudentId)) return structuredClone(draft)
     const sid = fixedStudentId ?? params.get('student')
     const plan = selectPlan(data, params.get('plan') ?? undefined)
-    if (sid && plan && data.students.some((s) => s.id === sid)) {
+    // Coaches first pick the class (the plan is preselected for them). With a workout already in progress,
+    // stay on the start screen (which lists it) rather than open a second one.
+    if (mode !== 'coach' && sid && plan && data.students.some((s) => s.id === sid) && !selectDrafts(data, sid, mode).length) {
       const menu = planMenu(plan)
       return { ...emptyWorkout(sid, mode, data.coach.id), title: plan.name, planId: plan.id, trainingDayId: menu.id, exercises: logsFromDay(menu) }
     }
@@ -105,8 +148,12 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
   })
 
   const [lastSaved, setLastSaved] = useState<string | null>(null)
+  /** A new workout held back because the student already has one in progress (likely a duplicate). */
+  const [pendingStart, setPendingStart] = useState<{ fresh: WorkoutSession; draft: WorkoutSession } | null>(null)
   /** Plan picked to start from; null = the student's assigned plan. */
-  const [chosenPlan, setChosenPlan] = useState<ID | null>(null)
+  const [chosenPlan, setChosenPlan] = useState<ID | null>(() => params.get('plan'))
+  /** Coaches: the class this session is for; null = today's nearest, 'adhoc' = an unscheduled class. */
+  const [chosenClass, setChosenClass] = useState<ID | 'adhoc' | null>(() => params.get('appointment'))
   const [pickerOpen, setPickerOpen] = useState(false)
   const [confirmFinish, setConfirmFinish] = useState<number | null>(null)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
@@ -130,6 +177,15 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
   const day = plan ? planMenu(plan) : undefined
 
   const rxFor = (exerciseId: ID): ExercisePrescription | undefined => day?.exercises.find((r) => r.exerciseId === exerciseId)
+
+  // Coached sessions are logged for a scheduled class, so one class can't end up logged twice.
+  const classes = mode === 'coach' && student && !workout ? openClasses(data, student.id, new Date(now)) : []
+  const todaysClass = classes.find((c) => isSameDay(c.appt.startAt, new Date(now)))
+  const selectedClass: OpenClass | 'adhoc' | undefined =
+    chosenClass === 'adhoc' || (mode === 'coach' && student && !classes.length)
+      ? 'adhoc'
+      : classes.find((c) => c.appt.id === (chosenClass ?? todaysClass?.appt.id))
+  const workoutClass = data.appointments.find((a) => a.id === workout?.appointmentId)
 
   const lastByExercise = useMemo(() => {
     const m = new Map<ID, { log: ExerciseLog; date: string }>()
@@ -158,9 +214,22 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
   const patch = (fn: (w: WorkoutSession) => WorkoutSession) => setWorkout((w) => (w ? fn(w) : w))
   const setLog = (i: number, log: ExerciseLog) => patch((w) => ({ ...w, exercises: w.exercises.map((e, j) => (j === i ? log : e)) }))
 
-  const start = (w: WorkoutSession) => {
+  const begin = (w: WorkoutSession) => {
+    setPendingStart(null)
     setWorkout(w)
     setParams({}, { replace: true })
+  }
+
+  const start = (w: WorkoutSession) => {
+    let next = w
+    if (mode === 'coach') {
+      if (!selectedClass) return notify('請先選擇是哪一堂課', 'error')
+      if (selectedClass !== 'adhoc') next = forClass(w, selectedClass.appt)
+    }
+    // An unfinished workout outside any class (classes show their own) usually means logging the session twice: ask first.
+    const draft = selectDrafts(data, w.studentId, mode).find((d) => !d.appointmentId)
+    if (draft) setPendingStart({ fresh: next, draft })
+    else begin(next)
   }
 
   /** A plan is one menu: its exercises, sets and target weights come in, titled after the plan. */
@@ -195,10 +264,26 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
   const finish = () => {
     if (!workout) return
     setConfirmFinish(null)
+    const nowISO = new Date().toISOString()
+    // A class from an earlier day ends that day, not when the coach got round to logging it.
+    const completedAt = isSameDay(workout.startedAt, nowISO)
+      ? nowISO
+      : new Date(new Date(workout.startedAt).getTime() + (workoutClass?.durationMin ?? 60) * 60_000).toISOString()
+    let appointmentId = workout.appointmentId
+    if (mode === 'coach' && !appointmentId) {
+      // An unscheduled class goes on the schedule, so every coached session has its class.
+      const minutes = Math.min(240, Math.max(15, Math.round((durationMin(workout.startedAt, completedAt) ?? 0) / 15) * 15 || 60))
+      const res = actions.saveAppointments([
+        { id: uid('apt'), coachId: data.coach.id, studentId: workout.studentId, startAt: workout.startedAt, durationMin: minutes, location: lastLocation(data, workout.studentId), status: 'scheduled' },
+      ])
+      if (!res.ok) return notify(res.error, 'error')
+      appointmentId = res.value[0].id
+    }
     const completed: WorkoutSession = {
       ...workout,
+      appointmentId,
       status: 'completed',
-      completedAt: new Date().toISOString(),
+      completedAt,
       exercises: workout.exercises
         .map((e) => ({ ...e, sets: e.sets.filter((s) => s.completed) }))
         .filter((e) => e.sets.length),
@@ -264,7 +349,7 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
                       size="sm"
                       onClick={() => {
                         setStudentId(d.studentId)
-                        start(structuredClone(d))
+                        begin(structuredClone(d))
                       }}
                     >
                       繼續
@@ -287,6 +372,7 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
               onChange={(e) => {
                 setStudentId(e.target.value)
                 setChosenPlan(null)
+                setChosenClass(null)
               }}
               className="h-12 md:h-10"
             >
@@ -309,8 +395,46 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
             </div>
           )}
 
+          {mode === 'coach' && student && (
+            <div className="mt-5">
+              <p className="mb-2 text-[13px] font-medium text-ink-700">哪一堂課</p>
+              <div role="radiogroup" aria-label="哪一堂課" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {classes.map((c) => (
+                  <ChoiceCard
+                    key={c.appt.id}
+                    picked={selectedClass !== 'adhoc' && selectedClass?.appt.id === c.appt.id}
+                    onPick={() => setChosenClass(c.appt.id)}
+                    icon={CalendarClock}
+                    title={`${relativeDay(c.appt.startAt)} ${formatTime(c.appt.startAt)}`}
+                    badge={c.draft && <Badge tone="accent">記錄中</Badge>}
+                    sub={`${c.appt.durationMin} 分鐘・${c.appt.location}`}
+                  />
+                ))}
+                <ChoiceCard
+                  picked={selectedClass === 'adhoc'}
+                  onPick={() => setChosenClass('adhoc')}
+                  icon={CalendarPlus}
+                  title="未排課（臨時加課）"
+                  sub={classes.length ? '完成後自動加入課表' : '近期沒有排課・完成後自動加入課表'}
+                />
+              </div>
+            </div>
+          )}
+
           {!student ? (
-            mode === 'coach' && <p className="mt-4 text-sm text-ink-500">選擇學員後，可從計畫、上次訓練或空白開始。</p>
+            mode === 'coach' && <p className="mt-4 text-sm text-ink-500">選擇學員後，先選是哪一堂課，再從計畫、上次訓練或空白開始。</p>
+          ) : mode === 'coach' && !selectedClass ? (
+            <p className="mt-4 text-sm text-ink-500">選擇是哪一堂課後，再從計畫、上次訓練或空白開始。</p>
+          ) : selectedClass && selectedClass !== 'adhoc' && selectedClass.draft ? (
+            <div className="mt-5 flex flex-col gap-3 rounded-xl bg-accent-50 px-4 py-3.5 sm:flex-row sm:items-center">
+              <p className="flex-1 text-sm text-ink-700">
+                這堂課已經開始記錄「{selectedClass.draft.title}」，已完成{' '}
+                {selectedClass.draft.exercises.reduce((n, e) => n + e.sets.filter((x) => x.completed).length, 0)} 組。
+              </p>
+              <Button className="h-12 sm:h-10" onClick={() => selectedClass.draft && begin(structuredClone(selectedClass.draft))}>
+                繼續記錄
+              </Button>
+            </div>
           ) : (
             <div className="mt-5 space-y-5">
               {startablePlans.length ? (
@@ -319,39 +443,17 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
                   <div role={mode === 'coach' ? 'radiogroup' : undefined} aria-label="從計畫開始" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {startablePlans.slice(0, PLAN_CARDS).map((p) => {
                       const menu = planMenu(p)
-                      const picked = selectedPlan?.id === p.id
                       return (
-                        <button
+                        <ChoiceCard
                           key={p.id}
-                          type="button"
-                          role={mode === 'coach' ? 'radio' : undefined}
-                          aria-checked={mode === 'coach' ? picked : undefined}
                           // Students have one plan: a tap starts it. Coaches pick one, then start.
-                          onClick={() => (mode === 'coach' ? setChosenPlan(p.id) : startFromPlan(p))}
-                          className={`flex items-center gap-3 rounded-xl border px-4 py-3.5 text-left transition-colors ${
-                            picked ? 'border-accent-600 bg-accent-50' : 'border-line-strong hover:border-accent-600 hover:bg-accent-50'
-                          }`}
-                        >
-                          <ClipboardList className="size-5 shrink-0 text-accent-700" />
-                          <div className="min-w-0 flex-1">
-                            <p className="flex items-center gap-1.5 text-[15px] font-medium text-ink-900">
-                              <span className="truncate">{p.name}</span>
-                              {p.id === activePlan?.id && mode === 'coach' && <Badge tone="accent">已指派</Badge>}
-                            </p>
-                            <p className="truncate text-xs text-ink-500">
-                              {menu.exercises.length} 個動作
-                              {menu.exercises.length > 0 && `・${menu.exercises.map((r) => exMap.get(r.exerciseId)?.name).slice(0, 3).join('、')}`}
-                            </p>
-                          </div>
-                          {mode === 'coach' && (
-                            <span
-                              aria-hidden
-                              className={`inline-flex size-6 shrink-0 items-center justify-center rounded-full border-2 ${picked ? 'border-accent-600 bg-accent-600 text-white' : 'border-ink-300'}`}
-                            >
-                              {picked && <Check className="size-3.5" strokeWidth={3} />}
-                            </span>
-                          )}
-                        </button>
+                          picked={mode === 'coach' ? selectedPlan?.id === p.id : undefined}
+                          onPick={() => (mode === 'coach' ? setChosenPlan(p.id) : startFromPlan(p))}
+                          icon={ClipboardList}
+                          title={p.name}
+                          badge={p.id === activePlan?.id && mode === 'coach' && <Badge tone="accent">已指派</Badge>}
+                          sub={`${menu.exercises.length} 個動作${menu.exercises.length ? `・${menu.exercises.map((r) => exMap.get(r.exerciseId)?.name).slice(0, 3).join('、')}` : ''}`}
+                        />
                       )
                     })}
                   </div>
@@ -425,6 +527,30 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
             </div>
           )}
         </Card>
+
+        <Modal
+          open={!!pendingStart}
+          onClose={() => setPendingStart(null)}
+          title="還有一筆未完成的訓練"
+          description={(() => {
+            if (!pendingStart) return undefined
+            const d = pendingStart.draft
+            const who = mode === 'coach' ? `${selectStudent(data, d.studentId)?.name ?? ''}的` : ''
+            const done = d.exercises.reduce((n, e) => n + e.sets.filter((x) => x.completed).length, 0)
+            return `${who}「${d.title}」${relativeDay(d.startedAt)} ${formatTime(d.startedAt)} 開始，已完成 ${done} 組。如果是同一堂課，請繼續這筆，避免重複記錄。`
+          })()}
+          size="sm"
+          footer={
+            <>
+              <Button variant="ghost" className="h-11 md:mr-auto md:h-10" onClick={() => pendingStart && begin(pendingStart.fresh)}>
+                仍要開始新的
+              </Button>
+              <Button className="h-11 md:h-10" onClick={() => pendingStart && begin(structuredClone(pendingStart.draft))}>
+                繼續未完成的
+              </Button>
+            </>
+          }
+        />
       </div>
     )
   }
@@ -452,7 +578,9 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-500">
               <span className="inline-flex items-center gap-1">
                 <Clock className="size-3.5" />
-                {formatTime(workout.startedAt)} 開始・{elapsed ?? 0} 分鐘
+                {isSameDay(workout.startedAt, new Date(now))
+                  ? `${formatTime(workout.startedAt)} 開始・${elapsed ?? 0} 分鐘`
+                  : `補登 ${formatDate(workout.startedAt)} ${formatTime(workout.startedAt)} 的課`}
               </span>
               {plan && <span>{plan.name}</span>}
               {mode === 'coach' && balance && (
@@ -623,5 +751,52 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
         }}
       />
     </div>
+  )
+}
+
+/** A choice on the start screen: a radio card when `picked` is given, else a plain button that acts at once. */
+function ChoiceCard({
+  picked,
+  onPick,
+  icon: Icon,
+  title,
+  badge,
+  sub,
+}: {
+  picked?: boolean
+  onPick: () => void
+  icon: LucideIcon
+  title: string
+  badge?: ReactNode
+  sub: string
+}) {
+  const radio = picked !== undefined
+  return (
+    <button
+      type="button"
+      role={radio ? 'radio' : undefined}
+      aria-checked={radio ? picked : undefined}
+      onClick={onPick}
+      className={`flex items-center gap-3 rounded-xl border px-4 py-3.5 text-left transition-colors ${
+        picked ? 'border-accent-600 bg-accent-50' : 'border-line-strong hover:border-accent-600 hover:bg-accent-50'
+      }`}
+    >
+      <Icon className="size-5 shrink-0 text-accent-700" />
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-1.5 text-[15px] font-medium text-ink-900">
+          <span className="truncate">{title}</span>
+          {badge}
+        </p>
+        <p className="truncate text-xs text-ink-500">{sub}</p>
+      </div>
+      {radio && (
+        <span
+          aria-hidden
+          className={`inline-flex size-6 shrink-0 items-center justify-center rounded-full border-2 ${picked ? 'border-accent-600 bg-accent-600 text-white' : 'border-ink-300'}`}
+        >
+          {picked && <Check className="size-3.5" strokeWidth={3} />}
+        </span>
+      )}
+    </button>
   )
 }

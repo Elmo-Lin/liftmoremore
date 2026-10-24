@@ -155,6 +155,8 @@ export interface WorkoutSession {
   title: string
   planId?: ID
   trainingDayId?: ID
+  /** Coached sessions: the scheduled class this was logged for (finishing it completes the class). */
+  appointmentId?: ID
   startedAt: ISODate
   completedAt?: ISODate
   updatedAt: ISODate
