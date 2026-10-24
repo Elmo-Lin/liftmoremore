@@ -46,6 +46,8 @@ public class ScheduleService {
         String status = in.status() == null ? "scheduled" : Domain.require(Domain.APPOINTMENT_STATUSES, in.status(), "status");
         Appointment a = new Appointment();
         a.id = Ids.orNew(id, "apt");
+        // The ID is client-chosen: a studio coach must not overwrite another coach's student's class.
+        db.get(db.coachDoc(user.coachId(), Db.APPOINTMENTS, a.id), Appointment.class).ifPresent(old -> access.student(user, old.studentId));
         a.coachId = user.coachId();
         a.studentId = s.id;
         a.startAt = in.startAt();

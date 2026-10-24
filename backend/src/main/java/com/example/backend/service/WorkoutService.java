@@ -92,6 +92,8 @@ public class WorkoutService {
                 if (user.isStudent() && (!existing.studentId.equals(user.userId()) || !Domain.STUDENT.equals(existing.createdBy))) {
                     throw ApiException.forbidden("無法修改教練記錄的課程");
                 }
+                // The ID is client-chosen: a studio coach must not overwrite another coach's student's workout.
+                requireVisible(user, existing.studentId);
                 List<SessionTransaction> linked = tx.list(db.coachCol(user.coachId(), Db.TRANSACTIONS).whereEqualTo("workoutId", workoutId), SessionTransaction.class);
                 if (Ledger.netForWorkout(workoutId, linked) < 0) {
                     if (!existing.studentId.equals(in.studentId())) throw ApiException.conflict("already_deducted", "已扣堂的課程無法更換學員");

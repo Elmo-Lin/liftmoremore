@@ -98,6 +98,7 @@ public class PasswordResetService {
             UserAccount u = tx.get(userRef, UserAccount.class).orElseThrow(() -> ApiException.badRequest("重設連結已失效，請重新申請"));
             if (Boolean.FALSE.equals(u.active)) throw ApiException.unauthorized("此帳號已停用，請聯絡工作室");
             tx.update(userRef, "passwordHash", hash);
+            tx.update(userRef, "emailVerified", true); // the link only reaches the email's owner
             tx.delete(resetRef);
             return u.id;
         });

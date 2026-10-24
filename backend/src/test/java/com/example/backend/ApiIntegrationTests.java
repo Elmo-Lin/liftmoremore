@@ -446,6 +446,14 @@ class ApiIntegrationTests {
         assertThat(call(put("/api/workouts/wo_amy" + suffix), amy[1], workout(ownStudent, "coached", "completed")).status()).isEqualTo(404);
         assertThat(call(post("/api/students/" + ownStudent + "/packages"), amy[1], Map.of("name", "x", "totalSessions", 5, "priceTwd", 0,
                 "purchaseDate", Instant.now().toString())).status()).isEqualTo(404);
+        // IDs are client-chosen: knowing one must not let amy overwrite the records of a student who isn't hers.
+        String ownersWorkout = saveWorkout(st.owner(), ownStudent, "coached");
+        assertThat(call(put("/api/workouts/" + ownersWorkout), amy[1], workout(amyOwn, "coached", "completed")).status()).isEqualTo(404);
+        String ownersClass = "apt_own" + suffix;
+        String at = Instant.now().plusSeconds(86400).toString();
+        call(put("/api/appointments/" + ownersClass), st.owner(), Map.of("studentId", ownStudent, "startAt", at, "durationMin", 60, "location", "工作室"));
+        assertThat(call(put("/api/appointments/" + ownersClass), amy[1], Map.of("studentId", amyOwn, "startAt", at, "durationMin", 60, "location", "工作室")).status())
+                .isEqualTo(404);
         assertThat(call(get("/api/students"), st.owner(), null).body().size()).as("the owner sees every student").isEqualTo(3);
         String rels = call(get("/api/bootstrap"), st.owner(), null).body().get("relationships").toString();
         assertThat(rels).contains(amy[0]).contains(st.ownerId());

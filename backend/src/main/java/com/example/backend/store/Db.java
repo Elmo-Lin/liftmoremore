@@ -41,6 +41,7 @@ public class Db {
     public static final String COACHES = "coaches";
     public static final String BILLING_ORDERS = "billingOrders";
     public static final String PASSWORD_RESETS = "passwordResets";
+    public static final String LOGIN_GUARDS = "loginGuards";
 
     public static final String STUDENTS = "students";
     public static final String PLANS = "plans";

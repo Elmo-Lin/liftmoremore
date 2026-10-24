@@ -31,12 +31,14 @@ public class AuthService {
     private final PasswordEncoder passwords;
     private final TokenService tokens;
     private final GoogleTokenVerifier google;
+    private final LoginGuard guard;
 
-    public AuthService(Db db, PasswordEncoder passwords, TokenService tokens, GoogleTokenVerifier google) {
+    public AuthService(Db db, PasswordEncoder passwords, TokenService tokens, GoogleTokenVerifier google, LoginGuard guard) {
         this.db = db;
         this.passwords = passwords;
         this.tokens = tokens;
         this.google = google;
+        this.guard = guard;
     }
 
     public AuthResponse registerCoach(RegisterCoachInput in) {
@@ -97,6 +99,7 @@ public class AuthService {
         u.coachId = u.id;
         u.passwordHash = passwordHash;
         u.googleSub = googleSub;
+        u.emailVerified = googleSub != null ? Boolean.TRUE : null;
         u.createdAt = now;
         Coach c = new Coach();
         c.id = u.id;
@@ -127,6 +130,7 @@ public class AuthService {
         u.coachId = u.id;
         u.passwordHash = passwordHash;
         u.googleSub = googleSub;
+        u.emailVerified = googleSub != null ? Boolean.TRUE : null;
         u.createdAt = now;
         Coach space = new Coach();
         space.id = u.id;
@@ -171,7 +175,10 @@ public class AuthService {
         });
     }
 
-    /** Remembers the Google account; an invited student or studio coach is activated by it. */
+    /**
+     * Remembers the Google account; an invited student or studio coach is activated by it. An
+     * unverified account's password is dropped (see below); its owner can set a new one by email.
+     */
     private void linkGoogle(UserAccount u, String sub) {
         db.transaction(tx -> {
             var userRef = db.doc(Db.USERS, u.id);
@@ -185,6 +192,10 @@ public class AuthService {
                 student.inviteCode = null;
                 tx.set(studentRef, student);
             }
+            // Signing up with a password never proved the email: someone could have registered it first,
+            // waiting for its owner to arrive through Google. Their password stops working here.
+            if (!Boolean.TRUE.equals(fresh.emailVerified)) fresh.passwordHash = null;
+            fresh.emailVerified = true;
             fresh.googleSub = sub;
             fresh.inviteCode = null;
             tx.set(userRef, fresh);
@@ -194,14 +205,17 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginInput in) {
+        guard.check(in.email());
         UserAccount u = db.get(db.doc(Db.EMAILS, key(in.email())), EmailOwner.class)
                 .flatMap(o -> db.get(db.doc(Db.USERS, o.userId), UserAccount.class))
                 .orElse(null);
         // Same message for unknown email and wrong password — don't reveal which accounts exist.
         if (u == null || u.passwordHash == null || !passwords.matches(in.password(), u.passwordHash)) {
+            guard.failed(in.email());
             throw ApiException.unauthorized("Email 或密碼不正確");
         }
         if (Boolean.FALSE.equals(u.active)) throw ApiException.unauthorized("此帳號已停用，請聯絡工作室");
+        guard.succeeded(in.email());
         return issue(u);
     }
 

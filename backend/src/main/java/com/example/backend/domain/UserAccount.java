@@ -16,6 +16,8 @@ public class UserAccount {
     public String passwordHash;
     /** Google account ID ({@code sub}) once the user has signed in with Google. */
     public String googleSub;
+    /** Proven to own the email: signed in with Google, or reset the password from a mailed link. */
+    public Boolean emailVerified;
     /** Workspace this account belongs to: the coach's own ID for free coaches and studio owners. */
     public String coachId;
     /** Coaches: shown on their profile (the workspace's title is used for the owner of older data). */
