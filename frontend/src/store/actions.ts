@@ -266,12 +266,10 @@ export function createActions(get: () => AppData, set: (next: AppData) => void, 
 
     savePlan(plan: TrainingPlan): Result<TrainingPlan> {
       if (!plan.name.trim()) return fail('請輸入計畫名稱')
-      if (!plan.days.length) return fail('計畫至少需要一個訓練日')
-      const emptyDay = plan.days.find((dy) => !dy.name.trim())
-      if (emptyDay) return fail('每個訓練日都需要名稱')
+      if (!plan.days.length) return fail('計畫內容不完整')
       for (const dy of plan.days)
         for (const rx of dy.exercises)
-          if (!Number.isInteger(rx.sets) || rx.sets < 1 || rx.sets > 20) return fail(`「${dy.name}」有組數不正確的動作`)
+          if (!Number.isInteger(rx.sets) || rx.sets < 1 || rx.sets > 20) return fail('有動作的組數不正確（需為 1–20）')
       const saved: TrainingPlan = { ...plan, name: plan.name.trim(), authorRole: 'coach', updatedAt: nowISO() }
       update((d) => ({
         ...d,

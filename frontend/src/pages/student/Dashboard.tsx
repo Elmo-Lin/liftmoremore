@@ -6,7 +6,8 @@ import { BalanceMeter, Card, CardHeader, DemoNotice, EmptyState, PageHeader } fr
 import { WorkoutDetailModal, WorkoutRow } from '../../components/workout/WorkoutDetail'
 import { addDays, formatDate, formatTime, givenName, relativeDay } from '../../lib/format'
 import { LOW_BALANCE_THRESHOLD } from '../../lib/sessions'
-import { nextTrainingDay, recentPRs, weekStreak, workoutDate } from '../../lib/stats'
+import { planMenu } from '../../lib/plans'
+import { recentPRs, weekStreak, workoutDate } from '../../lib/stats'
 import { useData } from '../../store/contexts'
 import { selectBalance, selectCompleted, selectDrafts, selectNextAppointment, selectPlan, useCurrentStudent, useExerciseMap, useIsSelf } from '../../store/selectors'
 import type { WorkoutSession } from '../../types'
@@ -22,7 +23,7 @@ export function StudentDashboardPage() {
   const balance = selectBalance(data, student.id)
   const next = selectNextAppointment(data, student.id)
   const plan = selectPlan(data, student.activePlanId)
-  const day = nextTrainingDay(plan, data.workouts, student.id)
+  const day = plan ? planMenu(plan) : undefined
   const prs = useMemo(() => recentPRs(workouts, addDays(new Date(), -28).toISOString()).slice(0, 3), [workouts])
   const streak = useMemo(() => weekStreak(workouts), [workouts])
   const now = new Date()
@@ -140,10 +141,10 @@ export function StudentDashboardPage() {
           {plan && day ? (
             <div className="px-5 pb-5">
               <div className="rounded-xl bg-canvas p-4">
-                <p className="text-xs text-ink-500">下一個訓練日</p>
+                <p className="text-xs text-ink-500">訓練計畫</p>
                 <p className="mt-0.5 text-[17px] font-semibold text-ink-900">{day.name}</p>
                 <p className="mt-1 text-[13px] text-ink-600">{day.exercises.map((r) => exMap.get(r.exerciseId)?.name).join('、')}</p>
-                <ButtonLink to={`/student/workouts/new?plan=${plan.id}&day=${day.id}`} icon={Play} variant="accent" className="mt-4 h-11 w-full sm:w-auto">
+                <ButtonLink to={`/student/workouts/new?plan=${plan.id}`} icon={Play} variant="accent" className="mt-4 h-11 w-full sm:w-auto">
                   開始此訓練
                 </ButtonLink>
               </div>

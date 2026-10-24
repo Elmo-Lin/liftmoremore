@@ -79,7 +79,14 @@ function plan(
   return { id, coachId: COACH_ID, authorRole: 'coach', name, description, goal, weeks, days, createdAt: created, updatedAt: created }
 }
 
+/** One plan per workout menu: each template day becomes its own plan (the first keeps the template's ID, which students are assigned). */
 function buildPlans(now: number): TrainingPlan[] {
+  return planTemplates(now).flatMap((p) =>
+    p.days.map((d, i) => ({ ...p, id: i === 0 ? p.id : `${p.id}_${i + 1}`, name: d.focus ? `${d.name}（${d.focus}）` : d.name, days: [d] })),
+  )
+}
+
+function planTemplates(now: number): TrainingPlan[] {
   return [
     plan('plan_strength8', '力量週8週訓練', '以深蹲、臥推、硬舉、肩推為核心，每週 3 練、8 週線性加重：完成目標組數就小幅增加重量。', 'strength', 8, [
       day('ps8_a', '力量 A', '深蹲 / 臥推', [
@@ -92,7 +99,7 @@ function buildPlans(now: number): TrainingPlan[] {
         ['ex_ohp', 5, '5'],
         ['ex_latpd', 3, '8'],
       ]),
-      day('ps8_c', '力量 C', '深蹲 / 臥推（次重）', [
+      day('ps8_c', '力量 C', '深蹲 / 臥推・次重', [
         ['ex_squat', 4, '4', '約 A 日重量的 90%'],
         ['ex_bench', 4, '4'],
         ['ex_rdl', 3, '6'],

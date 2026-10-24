@@ -6,11 +6,17 @@ import { Button, ButtonLink, IconButton } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/Modal'
 import { Avatar, Badge, Card, EmptyState, PageHeader } from '../../components/ui/Primitives'
 import { formatDate, GOAL_LABEL } from '../../lib/format'
+import { planMenu } from '../../lib/plans'
 import { useData, useToast } from '../../store/contexts'
+import { useExerciseMap } from '../../store/selectors'
 import type { TrainingPlan } from '../../types'
+
+/** Exercises listed on each plan card; the rest are counted. */
+const MAX_CHIPS = 5
 
 export function PlansPage() {
   const { data, actions } = useData()
+  const exMap = useExerciseMap()
   const notify = useToast()
   const navigate = useNavigate()
   const [assigning, setAssigning] = useState<TrainingPlan | null>(null)
@@ -46,7 +52,7 @@ export function PlansPage() {
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {plans.map((p) => {
             const assigned = data.students.filter((s) => s.activePlanId === p.id)
-            const exerciseCount = p.days.reduce((n, d) => n + d.exercises.length, 0)
+            const exercises = planMenu(p).exercises
             return (
               <Card key={p.id} className="flex flex-col p-5">
                 <div className="flex items-start gap-3">
@@ -58,15 +64,18 @@ export function PlansPage() {
                   </div>
                   <Badge tone="accent">{GOAL_LABEL[p.goal]}</Badge>
                 </div>
+                {/* What the menu trains: its first exercises. */}
                 <div className="mt-4 flex flex-wrap gap-1.5">
-                  {p.days.map((d) => (
-                    <span key={d.id} className="rounded-md bg-subtle px-2 py-1 text-xs text-ink-600">
-                      {d.name}
+                  {exercises.slice(0, MAX_CHIPS).map((rx) => (
+                    <span key={rx.id} className="rounded-md bg-subtle px-2 py-1 text-xs text-ink-600">
+                      {exMap.get(rx.exerciseId)?.name ?? '未知動作'}
                     </span>
                   ))}
+                  {exercises.length > MAX_CHIPS && <span className="px-1 py-1 text-xs text-ink-400">+{exercises.length - MAX_CHIPS}</span>}
+                  {!exercises.length && <span className="py-1 text-xs text-ink-400">尚未加入動作</span>}
                 </div>
                 <p className="mt-3 text-xs text-ink-500">
-                  {p.days.length} 個訓練日・{exerciseCount} 個動作{p.weeks ? `・建議 ${p.weeks} 週` : ''}・更新於 {formatDate(p.updatedAt)}
+                  {exercises.length} 個動作{p.weeks ? `・建議 ${p.weeks} 週` : ''}・更新於 {formatDate(p.updatedAt)}
                 </p>
                 <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-4">
                   <button type="button" onClick={() => setAssigning(p)} className="flex min-w-0 items-center gap-2 text-left">

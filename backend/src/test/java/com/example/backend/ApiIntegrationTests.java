@@ -259,6 +259,19 @@ class ApiIntegrationTests {
     }
 
     @Test
+    void workoutsRememberTheCombinedPlans() throws Exception {
+        String sid = createStudent(coach, "combo");
+        Map<String, Object> w = new java.util.HashMap<>(workout(sid, "coached", "draft"));
+        w.put("planId", "plan_a");
+        w.put("planIds", List.of("plan_a", "plan_b"));
+        assertThat(call(put("/api/workouts/wo_combo" + suffix), coach, w).status()).isEqualTo(200);
+        JsonNode saved = call(get("/api/workouts/wo_combo" + suffix), coach, null).body();
+        assertThat(saved.get("planIds").toString()).isEqualTo("[\"plan_a\",\"plan_b\"]");
+        assertThat(call(put("/api/workouts/wo_single" + suffix), coach, workout(sid, "coached", "draft")).body().has("planIds"))
+                .as("a single-plan or free workout has none").isFalse();
+    }
+
+    @Test
     void deductionsUseOldestPackageFirst() throws Exception {
         String sid = createStudent(coach, "eve");
         Resp older = call(post("/api/students/" + sid + "/packages"), coach,

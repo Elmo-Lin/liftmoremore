@@ -6,7 +6,8 @@ import { Avatar, Badge, Card, CardHeader, DemoNotice, EmptyState, PageHeader, St
 import { WorkoutDetailModal, WorkoutRow } from '../../components/workout/WorkoutDetail'
 import { formatDate, formatTime, givenName, isSameDay, relativeDay } from '../../lib/format'
 import { LOW_BALANCE_THRESHOLD } from '../../lib/sessions'
-import { nextTrainingDay, workoutDate } from '../../lib/stats'
+import { planMenu } from '../../lib/plans'
+import { workoutDate } from '../../lib/stats'
 import { seatsOf, seatsUsed } from '../../store/actions'
 import { useData, useSession } from '../../store/contexts'
 import { selectBalance, selectCoachName, selectCoachOf, selectCompleted, selectDrafts, selectPlan, selectStudent } from '../../store/selectors'
@@ -127,10 +128,10 @@ export function CoachDashboardPage() {
                 const s = selectStudent(data, a.studentId)
                 if (!s) return null
                 const plan = selectPlan(data, s.activePlanId)
-                const day = nextTrainingDay(plan, data.workouts, s.id)
+                const day = plan ? planMenu(plan) : undefined
                 const done = todayDone.some((w) => w.studentId === s.id)
                 const bal = selectBalance(data, s.id)
-                const href = plan && day ? `/coach/workouts/new?student=${s.id}&plan=${plan.id}&day=${day.id}` : `/coach/workouts/new?student=${s.id}`
+                const href = plan && day ? `/coach/workouts/new?student=${s.id}&plan=${plan.id}` : `/coach/workouts/new?student=${s.id}`
                 return (
                   <li key={a.id} className="flex items-center gap-3 px-5 py-3">
                     <span className="tabular w-12 shrink-0 text-sm font-semibold text-ink-800">{formatTime(a.startAt)}</span>

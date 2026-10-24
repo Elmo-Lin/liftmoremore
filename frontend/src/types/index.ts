@@ -155,6 +155,8 @@ export interface WorkoutSession {
   title: string
   planId?: ID
   trainingDayId?: ID
+  /** Started from several plans combined; planId is the first of them. */
+  planIds?: ID[]
   startedAt: ISODate
   completedAt?: ISODate
   updatedAt: ISODate

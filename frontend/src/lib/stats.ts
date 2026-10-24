@@ -3,7 +3,7 @@
 // - "Top set" = heaviest actually-lifted weight in a workout.
 // - Estimated 1RM uses the Epley formula and is always labeled as an estimate.
 //   It is only computed for sets of ≤ 10 reps, where the formula is reasonable.
-import type { ExerciseLog, ID, SetLog, TrainingDay, TrainingPlan, WorkoutSession } from '../types'
+import type { ExerciseLog, ID, SetLog, WorkoutSession } from '../types'
 import { startOfWeek } from './format'
 
 export const completedSets = (sets: SetLog[]) =>
@@ -217,14 +217,6 @@ export function weekStreak(workouts: WorkoutSession[], now = new Date()) {
   let streak = 0
   for (; i >= 0 && buckets[i].coached + buckets[i].independent > 0; i--) streak++
   return streak
-}
-
-/** The plan day after the one most recently completed (cycles through the plan). */
-export function nextTrainingDay(plan: TrainingPlan | undefined, workouts: WorkoutSession[], studentId: ID): TrainingDay | undefined {
-  if (!plan?.days.length) return undefined
-  const last = completedWorkouts(workouts, studentId).find((w) => w.planId === plan.id && w.trainingDayId)
-  const idx = last ? plan.days.findIndex((d) => d.id === last.trainingDayId) : -1
-  return plan.days[(idx + 1) % plan.days.length]
 }
 
 export function summarizeSets(log: ExerciseLog, max = 4) {

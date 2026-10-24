@@ -1,17 +1,18 @@
-import { ArrowDown, ArrowLeft, ArrowUp, ClipboardX, Copy, Plus, Save, Trash2, UserPlus } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowUp, ClipboardX, Plus, Save, Trash2, UserPlus } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { AssignPlanModal } from '../../components/coach/AssignPlanModal'
 import { Button, ButtonLink, IconButton } from '../../components/ui/Button'
 import { inputClass, SelectInput, TextArea, TextInput } from '../../components/ui/Form'
-import { ConfirmDialog, Modal } from '../../components/ui/Modal'
+import { Modal } from '../../components/ui/Modal'
 import { Card, EmptyState, PageHeader } from '../../components/ui/Primitives'
 import { ExercisePicker } from '../../components/workout/ExercisePicker'
 import { GOAL_LABEL } from '../../lib/format'
 import { uid } from '../../lib/id'
+import { asMenuPlan } from '../../lib/plans'
 import { useData, useToast } from '../../store/contexts'
 import { selectPlan, useExerciseMap } from '../../store/selectors'
-import type { ExercisePrescription, TrainingDay, TrainingGoal, TrainingPlan } from '../../types'
+import type { ExercisePrescription, TrainingGoal, TrainingPlan } from '../../types'
 
 function newPlan(coachId: string): TrainingPlan {
   const now = new Date().toISOString()
@@ -23,7 +24,8 @@ function newPlan(coachId: string): TrainingPlan {
     description: '',
     goal: 'general',
     weeks: 8,
-    days: [{ id: uid('day'), name: '訓練 A', focus: '', exercises: [] }],
+    // One plan = one workout menu (stored as its single day).
+    days: [{ id: uid('day'), name: '', focus: '', exercises: [] }],
     createdAt: now,
     updatedAt: now,
   }
@@ -49,7 +51,7 @@ export function PlanEditorPage() {
       </Card>
     )
   }
-  return <Editor key={id} initial={existing ? structuredClone(existing) : newPlan(data.coach.id)} isNew={isNew} />
+  return <Editor key={id} initial={existing ? asMenuPlan(structuredClone(existing)) : newPlan(data.coach.id)} isNew={isNew} />
 }
 
 function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
@@ -59,8 +61,7 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
   const exMap = useExerciseMap()
   const [plan, setPlan] = useState(initial)
   const [dirty, setDirty] = useState(isNew)
-  const [pickerFor, setPickerFor] = useState<number | null>(null)
-  const [removeDay, setRemoveDay] = useState<number | null>(null)
+  const [picking, setPicking] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const [assigning, setAssigning] = useState(false)
   const [nameError, setNameError] = useState<string>()
@@ -69,9 +70,10 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
     setPlan(fn)
     setDirty(true)
   }
-  const editDay = (i: number, fn: (d: TrainingDay) => TrainingDay) => edit((p) => ({ ...p, days: p.days.map((d, j) => (j === i ? fn(d) : d)) }))
-  const editRx = (di: number, ri: number, patch: Partial<ExercisePrescription>) =>
-    editDay(di, (d) => ({ ...d, exercises: d.exercises.map((r, j) => (j === ri ? { ...r, ...patch } : r)) }))
+  const exercises = plan.days[0]?.exercises ?? []
+  const editExercises = (fn: (list: ExercisePrescription[]) => ExercisePrescription[]) =>
+    edit((p) => ({ ...p, days: [{ ...p.days[0], exercises: fn(p.days[0]?.exercises ?? []) }] }))
+  const editRx = (ri: number, patch: Partial<ExercisePrescription>) => editExercises((list) => list.map((r, j) => (j === ri ? { ...r, ...patch } : r)))
 
   const save = (): TrainingPlan | null => {
     if (!plan.name.trim()) {
@@ -79,7 +81,8 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
       notify('請輸入計畫名稱', 'error')
       return null
     }
-    const res = actions.savePlan(plan)
+    // The menu carries the plan's name.
+    const res = actions.savePlan({ ...plan, days: [{ ...plan.days[0], name: plan.name.trim() }] })
     if (!res.ok) {
       notify(res.error, 'error')
       return null
@@ -128,7 +131,7 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
           required
           value={plan.name}
           maxLength={40}
-          placeholder="例如：上下半身分化 4 日"
+          placeholder="例如：上半身肌力、下肢爆發"
           error={nameError}
           onChange={(e) => {
             setNameError(undefined)
@@ -161,150 +164,91 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
         />
       </Card>
 
-      <div className="mt-6 mb-3 flex items-center justify-between">
-        <h2 className="text-[15px] font-semibold text-ink-900">訓練日（{plan.days.length}）</h2>
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={Plus}
-          onClick={() =>
-            edit((p) => ({ ...p, days: [...p.days, { id: uid('day'), name: `訓練 ${String.fromCharCode(65 + p.days.length)}`, focus: '', exercises: [] }] }))
-          }
-        >
-          新增訓練日
-        </Button>
-      </div>
-
-      <div className="space-y-4">
-        {plan.days.map((day, di) => (
-          <Card key={day.id}>
-            <div className="flex flex-col gap-2 border-b border-line p-4 sm:flex-row sm:items-center">
-              <input
-                aria-label="訓練日名稱"
-                value={day.name}
-                maxLength={20}
-                placeholder="訓練日名稱"
-                onChange={(e) => editDay(di, (d) => ({ ...d, name: e.target.value }))}
-                className={`${inputClass} h-10 font-medium sm:max-w-48 ${!day.name.trim() ? 'border-danger-600' : ''}`}
-              />
-              <input
-                aria-label="訓練重點"
-                value={day.focus ?? ''}
-                maxLength={30}
-                placeholder="重點（選填），例如：蹲為主"
-                onChange={(e) => editDay(di, (d) => ({ ...d, focus: e.target.value }))}
-                className={`${inputClass} h-10 sm:flex-1`}
-              />
-              <div className="flex items-center justify-end">
-                <IconButton icon={ArrowUp} label="上移訓練日" disabled={di === 0} onClick={() => edit((p) => ({ ...p, days: move(p.days, di, -1) }))} />
-                <IconButton icon={ArrowDown} label="下移訓練日" disabled={di === plan.days.length - 1} onClick={() => edit((p) => ({ ...p, days: move(p.days, di, 1) }))} />
-                <IconButton
-                  icon={Copy}
-                  label="複製訓練日"
-                  onClick={() =>
-                    edit((p) => {
-                      const copy = { ...structuredClone(day), id: uid('day'), name: `${day.name} 副本` }
-                      copy.exercises = copy.exercises.map((r) => ({ ...r, id: uid('rx') }))
-                      const days = [...p.days]
-                      days.splice(di + 1, 0, copy)
-                      return { ...p, days }
-                    })
-                  }
-                />
-                <IconButton
-                  icon={Trash2}
-                  label="刪除訓練日"
-                  tone="danger"
-                  disabled={plan.days.length === 1}
-                  onClick={() => (day.exercises.length ? setRemoveDay(di) : edit((p) => ({ ...p, days: p.days.filter((_, j) => j !== di) })))}
+      <h2 className="mt-6 mb-3 text-[15px] font-semibold text-ink-900">動作（{exercises.length}）</h2>
+      <Card>
+        {exercises.length > 0 && (
+          <div className="hidden grid-cols-[1.5rem_1fr_4.5rem_5rem_5.5rem_1fr_5.5rem] gap-2 px-4 pt-3 text-[11px] font-medium text-ink-400 lg:grid">
+            <span />
+            <span>動作</span>
+            <span>組數</span>
+            <span>次數</span>
+            <span>目標重量</span>
+            <span>備註</span>
+            <span />
+          </div>
+        )}
+        <ul className="divide-y divide-line lg:divide-y-0">
+          {exercises.map((rx, ri) => (
+            <li key={rx.id} className="grid grid-cols-[1.5rem_1fr_auto] items-center gap-2 px-4 py-3 lg:grid-cols-[1.5rem_1fr_4.5rem_5rem_5.5rem_1fr_5.5rem] lg:py-2">
+              <span className="tabular text-xs text-ink-400">{ri + 1}</span>
+              <p className="truncate text-sm font-medium text-ink-900">{exMap.get(rx.exerciseId)?.name}</p>
+              <div className="col-span-3 col-start-1 row-start-2 grid grid-cols-3 gap-2 pl-8 lg:contents">
+                <label className="block">
+                  <span className="mb-1 block text-[11px] text-ink-400 lg:hidden">組數</span>
+                  <input
+                    aria-label="組數"
+                    inputMode="numeric"
+                    value={rx.sets || ''}
+                    onChange={(e) => editRx(ri, { sets: Math.min(20, Number(e.target.value.replace(/\D/g, '')) || 0) })}
+                    className={`${inputClass} tabular h-10 text-center ${!rx.sets ? 'border-danger-600' : ''}`}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] text-ink-400 lg:hidden">次數</span>
+                  <input
+                    aria-label="次數"
+                    value={rx.reps}
+                    maxLength={7}
+                    placeholder="8-10"
+                    onChange={(e) => editRx(ri, { reps: e.target.value.replace(/[^0-9-]/g, '') })}
+                    className={`${inputClass} tabular h-10 text-center`}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] text-ink-400 lg:hidden">目標 kg</span>
+                  <input
+                    aria-label="目標重量 kg"
+                    inputMode="decimal"
+                    value={rx.targetWeightKg ?? ''}
+                    placeholder="—"
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^0-9.]/g, '')
+                      editRx(ri, { targetWeightKg: v ? Math.min(500, Number(v)) : undefined })
+                    }}
+                    className={`${inputClass} tabular h-10 text-center`}
+                  />
+                </label>
+              </div>
+              <div className="col-span-3 col-start-1 row-start-3 pl-8 lg:col-span-1 lg:col-start-auto lg:row-start-auto lg:pl-0">
+                <input
+                  aria-label="動作備註"
+                  value={rx.notes ?? ''}
+                  maxLength={60}
+                  placeholder="備註（選填）"
+                  onChange={(e) => editRx(ri, { notes: e.target.value })}
+                  className={`${inputClass} h-10`}
                 />
               </div>
-            </div>
-
-            {day.exercises.length > 0 && (
-              <div className="hidden grid-cols-[1.5rem_1fr_4.5rem_5rem_5.5rem_1fr_5.5rem] gap-2 px-4 pt-3 text-[11px] font-medium text-ink-400 lg:grid">
-                <span />
-                <span>動作</span>
-                <span>組數</span>
-                <span>次數</span>
-                <span>目標重量</span>
-                <span>備註</span>
-                <span />
+              <div className="col-start-3 row-start-1 flex justify-end lg:col-start-auto lg:row-start-auto">
+                <IconButton icon={ArrowUp} label="上移" size="sm" disabled={ri === 0} onClick={() => editExercises((list) => move(list, ri, -1))} />
+                <IconButton icon={ArrowDown} label="下移" size="sm" disabled={ri === exercises.length - 1} onClick={() => editExercises((list) => move(list, ri, 1))} />
+                <IconButton icon={Trash2} label="移除" size="sm" tone="danger" onClick={() => editExercises((list) => list.filter((_, j) => j !== ri))} />
               </div>
-            )}
-            <ul className="divide-y divide-line lg:divide-y-0">
-              {day.exercises.map((rx, ri) => (
-                <li key={rx.id} className="grid grid-cols-[1.5rem_1fr_auto] items-center gap-2 px-4 py-3 lg:grid-cols-[1.5rem_1fr_4.5rem_5rem_5.5rem_1fr_5.5rem] lg:py-2">
-                  <span className="tabular text-xs text-ink-400">{ri + 1}</span>
-                  <p className="truncate text-sm font-medium text-ink-900">{exMap.get(rx.exerciseId)?.name}</p>
-                  <div className="col-span-3 col-start-1 row-start-2 grid grid-cols-3 gap-2 pl-8 lg:contents">
-                    <label className="block">
-                      <span className="mb-1 block text-[11px] text-ink-400 lg:hidden">組數</span>
-                      <input
-                        aria-label="組數"
-                        inputMode="numeric"
-                        value={rx.sets || ''}
-                        onChange={(e) => editRx(di, ri, { sets: Math.min(20, Number(e.target.value.replace(/\D/g, '')) || 0) })}
-                        className={`${inputClass} tabular h-10 text-center ${!rx.sets ? 'border-danger-600' : ''}`}
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="mb-1 block text-[11px] text-ink-400 lg:hidden">次數</span>
-                      <input
-                        aria-label="次數"
-                        value={rx.reps}
-                        maxLength={7}
-                        placeholder="8-10"
-                        onChange={(e) => editRx(di, ri, { reps: e.target.value.replace(/[^0-9-]/g, '') })}
-                        className={`${inputClass} tabular h-10 text-center`}
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="mb-1 block text-[11px] text-ink-400 lg:hidden">目標 kg</span>
-                      <input
-                        aria-label="目標重量 kg"
-                        inputMode="decimal"
-                        value={rx.targetWeightKg ?? ''}
-                        placeholder="—"
-                        onChange={(e) => {
-                          const v = e.target.value.replace(/[^0-9.]/g, '')
-                          editRx(di, ri, { targetWeightKg: v ? Math.min(500, Number(v)) : undefined })
-                        }}
-                        className={`${inputClass} tabular h-10 text-center`}
-                      />
-                    </label>
-                  </div>
-                  <div className="col-span-3 col-start-1 row-start-3 pl-8 lg:col-span-1 lg:col-start-auto lg:row-start-auto lg:pl-0">
-                    <input
-                      aria-label="動作備註"
-                      value={rx.notes ?? ''}
-                      maxLength={60}
-                      placeholder="備註（選填）"
-                      onChange={(e) => editRx(di, ri, { notes: e.target.value })}
-                      className={`${inputClass} h-10`}
-                    />
-                  </div>
-                  <div className="col-start-3 row-start-1 flex justify-end lg:col-start-auto lg:row-start-auto">
-                    <IconButton icon={ArrowUp} label="上移" size="sm" disabled={ri === 0} onClick={() => editDay(di, (d) => ({ ...d, exercises: move(d.exercises, ri, -1) }))} />
-                    <IconButton icon={ArrowDown} label="下移" size="sm" disabled={ri === day.exercises.length - 1} onClick={() => editDay(di, (d) => ({ ...d, exercises: move(d.exercises, ri, 1) }))} />
-                    <IconButton icon={Trash2} label="移除" size="sm" tone="danger" onClick={() => editDay(di, (d) => ({ ...d, exercises: d.exercises.filter((_, j) => j !== ri) }))} />
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <div className="p-4 pt-2">
-              <button
-                type="button"
-                onClick={() => setPickerFor(di)}
-                className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-strong text-sm font-medium text-ink-600 hover:border-accent-500 hover:bg-accent-50 hover:text-accent-700"
-              >
-                <Plus className="size-4" />
-                新增動作
-              </button>
-            </div>
-          </Card>
-        ))}
-      </div>
+            </li>
+          ))}
+        </ul>
+        {!exercises.length && <p className="px-4 pt-4 text-sm text-ink-500">加入這份菜單要做的動作，之後記錄訓練時可以一鍵帶入。</p>}
+        <div className="p-4 pt-2">
+          <button
+            type="button"
+            onClick={() => setPicking(true)}
+            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-strong text-sm font-medium text-ink-600 hover:border-accent-500 hover:bg-accent-50 hover:text-accent-700"
+          >
+            <Plus className="size-4" />
+            新增動作
+          </button>
+        </div>
+      </Card>
 
       {dirty && (
         <div className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-20 mt-6 md:bottom-4">
@@ -318,27 +262,10 @@ function Editor({ initial, isNew }: { initial: TrainingPlan; isNew: boolean }) {
       )}
 
       <ExercisePicker
-        open={pickerFor != null}
-        onClose={() => setPickerFor(null)}
-        existing={pickerFor != null ? plan.days[pickerFor]?.exercises.map((r) => r.exerciseId) : []}
-        onPick={(exerciseId) => {
-          const di = pickerFor
-          if (di == null) return
-          editDay(di, (d) => ({ ...d, exercises: [...d.exercises, { id: uid('rx'), exerciseId, sets: 3, reps: '10', restSec: 90 }] }))
-        }}
-      />
-      <ConfirmDialog
-        open={removeDay != null}
-        title="刪除此訓練日？"
-        description="此訓練日的所有動作設定都會被移除。"
-        confirmLabel="刪除"
-        tone="danger"
-        onCancel={() => setRemoveDay(null)}
-        onConfirm={() => {
-          const i = removeDay
-          setRemoveDay(null)
-          edit((p) => ({ ...p, days: p.days.filter((_, j) => j !== i) }))
-        }}
+        open={picking}
+        onClose={() => setPicking(false)}
+        existing={exercises.map((r) => r.exerciseId)}
+        onPick={(exerciseId) => editExercises((list) => [...list, { id: uid('rx'), exerciseId, sets: 3, reps: '10', restSec: 90 }])}
       />
       <Modal
         open={leaving}

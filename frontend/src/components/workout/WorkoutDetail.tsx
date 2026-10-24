@@ -170,7 +170,6 @@ export function WorkoutDetailModal({
                       <td className="w-12 px-3 py-1.5 text-ink-400">{i + 1}</td>
                       <td className="px-3 py-1.5 text-ink-900">{s.weightKg} kg</td>
                       <td className="px-3 py-1.5 text-ink-900">× {s.reps}</td>
-                      <td className="px-3 py-1.5 text-right text-ink-500">{s.rpe != null ? `RPE ${s.rpe}` : ''}</td>
                     </tr>
                   ))}
                 </tbody>

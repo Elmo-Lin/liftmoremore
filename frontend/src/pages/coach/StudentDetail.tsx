@@ -29,7 +29,8 @@ import { PlanDayView } from '../../components/workout/PlanDayView'
 import { WorkoutDetailModal, WorkoutRow } from '../../components/workout/WorkoutDetail'
 import { formatDate, formatTime, GENDER_LABEL, GOAL_LABEL, relativeDay } from '../../lib/format'
 import { deductionFor, LOW_BALANCE_THRESHOLD } from '../../lib/sessions'
-import { nextTrainingDay, personalRecords, weeklyBuckets, workoutDate } from '../../lib/stats'
+import { planMenu } from '../../lib/plans'
+import { personalRecords, weeklyBuckets, workoutDate } from '../../lib/stats'
 import { useData, useSession, useToast } from '../../store/contexts'
 import { selectBalance, selectCoachName, selectCoachOf, selectCompleted, selectNextAppointment, selectPlan, selectStudent } from '../../store/selectors'
 import type { Student, WorkoutSession } from '../../types'
@@ -68,8 +69,8 @@ export function StudentDetailPage() {
   const balance = selectBalance(data, student.id)
   const workouts = selectCompleted(data, student.id)
   const plan = selectPlan(data, student.activePlanId)
-  const day = nextTrainingDay(plan, data.workouts, student.id)
-  const startHref = plan && day ? `/coach/workouts/new?student=${student.id}&plan=${plan.id}&day=${day.id}` : `/coach/workouts/new?student=${student.id}`
+  const day = plan ? planMenu(plan) : undefined
+  const startHref = plan && day ? `/coach/workouts/new?student=${student.id}&plan=${plan.id}` : `/coach/workouts/new?student=${student.id}`
   const pending = workouts.filter((w) => w.type === 'coached' && !deductionFor(w.id, data.transactions)).length
 
   const toggleStatus = () => {
@@ -509,21 +510,16 @@ function PlansTab({ student }: { student: Student }) {
               編輯計畫
             </ButtonLink>
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {plan.days.map((d) => (
-              <PlanDayView
-                key={d.id}
-                day={d}
-                action={
-                  student.status === 'active' && (
-                    <ButtonLink to={`/coach/workouts/new?student=${student.id}&plan=${plan.id}&day=${d.id}`} size="sm" variant="secondary" icon={Play}>
-                      開始
-                    </ButtonLink>
-                  )
-                }
-              />
-            ))}
-          </div>
+          <PlanDayView
+            day={{ ...planMenu(plan), name: `${planMenu(plan).exercises.length} 個動作` }}
+            action={
+              student.status === 'active' && (
+                <ButtonLink to={`/coach/workouts/new?student=${student.id}&plan=${plan.id}`} size="sm" variant="secondary" icon={Play}>
+                  開始訓練
+                </ButtonLink>
+              )
+            }
+          />
         </>
       ) : (
         <Card>

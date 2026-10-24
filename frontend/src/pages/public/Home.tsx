@@ -93,7 +93,7 @@ export function HomePage() {
               name={PLANS.self.name}
               price={PLANS.self.price}
               who="沒有教練、自己練的人"
-              includes={['記錄自己的訓練：動作、重量、次數、RPE', '重量、訓練量與體重的進步追蹤', '為手機設計，記錄一組只要幾次點擊']}
+              includes={['記錄自己的訓練：動作、重量、次數', '重量、訓練量與體重的進步追蹤', '為手機設計，記錄一組只要幾次點擊']}
               addons={['無加購項目，一個人使用']}
             />
             <PlanCard

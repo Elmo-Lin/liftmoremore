@@ -1,4 +1,5 @@
 import {
+  Check,
   CircleCheck,
   ClipboardList,
   Clock,
@@ -15,6 +16,7 @@ import { durationMin, formatDate, formatTime, relativeDay } from '../../lib/form
 import { uid } from '../../lib/id'
 import { LOW_BALANCE_THRESHOLD } from '../../lib/sessions'
 import { lastExerciseLog, workoutDate } from '../../lib/stats'
+import { planMenu } from '../../lib/plans'
 import { useData, useToast } from '../../store/contexts'
 import { selectBalance, selectCompleted, selectDrafts, selectPlan, selectStudent, useExerciseMap, useIsSelf } from '../../store/selectors'
 import type { ExerciseLog, ExercisePrescription, ID, Role, TrainingDay, TrainingPlan, WorkoutSession } from '../../types'
@@ -27,6 +29,9 @@ import { DeleteDraftButton } from './DraftsCard'
 import { ExerciseCard, type SetSuggestion } from './ExerciseCard'
 import { ExercisePicker } from './ExercisePicker'
 
+/** Plans shown as cards when starting a workout; the rest can be added from a dropdown. */
+const PLAN_CARDS = 6
+
 function emptyWorkout(studentId: ID, mode: Role, coachId: ID): WorkoutSession {
   const today = new Date()
   const now = today.toISOString()
@@ -37,7 +42,7 @@ function emptyWorkout(studentId: ID, mode: Role, coachId: ID): WorkoutSession {
     type: mode === 'coach' ? 'coached' : 'independent',
     createdBy: mode,
     status: 'draft',
-    // Today's date by default (e.g. "10/24 訓練"); workouts started from a plan use the day's name.
+    // Today's date by default (e.g. "10/24 訓練"); workouts started from plans use their names.
     title: `${today.getMonth() + 1}/${today.getDate()} 訓練`,
     startedAt: now,
     updatedAt: now,
@@ -92,14 +97,16 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
     if (draft && (!fixedStudentId || draft.studentId === fixedStudentId)) return structuredClone(draft)
     const sid = fixedStudentId ?? params.get('student')
     const plan = selectPlan(data, params.get('plan') ?? undefined)
-    const day = plan?.days.find((d) => d.id === params.get('day'))
-    if (sid && plan && day && data.students.some((s) => s.id === sid)) {
-      return { ...emptyWorkout(sid, mode, data.coach.id), title: day.name, planId: plan.id, trainingDayId: day.id, exercises: logsFromDay(day) }
+    if (sid && plan && data.students.some((s) => s.id === sid)) {
+      const menu = planMenu(plan)
+      return { ...emptyWorkout(sid, mode, data.coach.id), title: plan.name, planId: plan.id, trainingDayId: menu.id, exercises: logsFromDay(menu) }
     }
     return null
   })
 
   const [lastSaved, setLastSaved] = useState<string | null>(null)
+  /** Plans picked to start from (coaches may combine several); null = the student's assigned plan. */
+  const [chosenPlans, setChosenPlans] = useState<ID[] | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [confirmFinish, setConfirmFinish] = useState<number | null>(null)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
@@ -119,10 +126,19 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
 
   const student = selectStudent(data, workout?.studentId ?? studentId)
   const balance = student ? selectBalance(data, student.id) : null
-  const plan = selectPlan(data, workout?.planId)
-  const day = plan?.days.find((d) => d.id === workout?.trainingDayId)
-
-  const rxFor = (exerciseId: ID): ExercisePrescription | undefined => day?.exercises.find((r) => r.exerciseId === exerciseId)
+  const planNames = [...new Set([workout?.planId, ...(workout?.planIds ?? [])])]
+    .map((id) => (id ? selectPlan(data, id)?.name : undefined))
+    .filter(Boolean)
+    .join(' + ')
+  /** Targets come from the plan each exercise was taken from (the first that has it, when plans were combined). */
+  const rxFor = (exerciseId: ID): ExercisePrescription | undefined => {
+    for (const id of new Set([workout?.planId, ...(workout?.planIds ?? [])])) {
+      const p = id ? selectPlan(data, id) : undefined
+      const rx = p && planMenu(p).exercises.find((r) => r.exerciseId === exerciseId)
+      if (rx) return rx
+    }
+    return undefined
+  }
 
   const lastByExercise = useMemo(() => {
     const m = new Map<ID, { log: ExerciseLog; date: string }>()
@@ -156,9 +172,28 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
     setParams({}, { replace: true })
   }
 
-  const startFromDay = (p: TrainingPlan, d: TrainingDay) => {
+  /**
+   * A plan is one menu: its exercises, sets and target weights come in, titled after the plan.
+   * Several plans combine in the order chosen; an exercise in more than one comes in once.
+   */
+  const startFromPlans = (plans: TrainingPlan[]) => {
     if (!student) return notify('請先選擇學員', 'error')
-    start({ ...emptyWorkout(student.id, mode, data.coach.id), title: d.name, planId: p.id, trainingDayId: d.id, exercises: logsFromDay(d) })
+    if (!plans.length) return
+    const menus = plans.map(planMenu)
+    const seen = new Set<ID>()
+    const exercises = menus.flatMap((m) => m.exercises).filter((rx) => {
+      if (seen.has(rx.exerciseId)) return false
+      seen.add(rx.exerciseId)
+      return true
+    })
+    start({
+      ...emptyWorkout(student.id, mode, data.coach.id),
+      title: plans.map((p) => p.name).join(' + ').slice(0, 60),
+      planId: plans[0].id,
+      planIds: plans.length > 1 ? plans.map((p) => p.id) : undefined,
+      trainingDayId: menus[0].id,
+      exercises: logsFromDay({ ...menus[0], exercises }),
+    })
   }
 
   const lastWorkout = student ? selectCompleted(data, student.id)[0] : undefined
@@ -218,6 +253,16 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
     const drafts = selectDrafts(data, fixedStudentId, mode)
     const activeStudents = data.students.filter((s) => s.status === 'active')
     const activePlan = selectPlan(data, student?.activePlanId)
+    // Coaches can start from any plan (the student's assigned one first); students only from theirs.
+    const startablePlans =
+      mode === 'coach'
+        ? [...data.plans].sort((x, y) => Number(y.id === activePlan?.id) - Number(x.id === activePlan?.id) || y.updatedAt.localeCompare(x.updatedAt))
+        : activePlan
+          ? [activePlan]
+          : []
+    const selectedPlanIds = chosenPlans ?? (mode === 'coach' && activePlan ? [activePlan.id] : [])
+    const selectedPlans = selectedPlanIds.map((id) => data.plans.find((p) => p.id === id)).filter((p): p is TrainingPlan => !!p)
+    const togglePlan = (id: ID) => setChosenPlans(selectedPlanIds.includes(id) ? selectedPlanIds.filter((x) => x !== id) : [...selectedPlanIds, id])
     return (
       <div className="space-y-5">
         {drafts.length > 0 && (
@@ -267,7 +312,10 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
               required
               containerClassName="mt-4"
               value={studentId}
-              onChange={(e) => setStudentId(e.target.value)}
+              onChange={(e) => {
+                setStudentId(e.target.value)
+                setChosenPlans(null)
+              }}
               className="h-12 md:h-10"
             >
               <option value="">選擇學員…</option>
@@ -293,37 +341,85 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
             mode === 'coach' && <p className="mt-4 text-sm text-ink-500">選擇學員後，可從計畫、上次訓練或空白開始。</p>
           ) : (
             <div className="mt-5 space-y-5">
-              {activePlan ? (
+              {startablePlans.length ? (
                 <div>
                   <p className="mb-2 text-[13px] font-medium text-ink-700">
-                    從計畫開始<span className="ml-1.5 font-normal text-ink-500">{activePlan.name}</span>
+                    從計畫開始
+                    {mode === 'coach' && <span className="ml-1.5 font-normal text-ink-500">可以多選，合併成一次訓練</span>}
                   </p>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {activePlan.days.map((d) => (
-                      <button
-                        key={d.id}
-                        type="button"
-                        onClick={() => startFromDay(activePlan, d)}
-                        className="flex items-center gap-3 rounded-xl border border-line-strong px-4 py-3.5 text-left transition-colors hover:border-accent-600 hover:bg-accent-50"
-                      >
-                        <ClipboardList className="size-5 shrink-0 text-accent-700" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[15px] font-medium text-ink-900">{d.name}</p>
-                          <p className="truncate text-xs text-ink-500">
-                            {d.exercises.length} 個動作・{d.exercises.map((r) => exMap.get(r.exerciseId)?.name).slice(0, 3).join('、')}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
+                    {startablePlans.slice(0, PLAN_CARDS).map((p) => {
+                      const menu = planMenu(p)
+                      const picked = selectedPlanIds.includes(p.id)
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          aria-pressed={mode === 'coach' ? picked : undefined}
+                          // Students have one plan: a tap starts it. Coaches pick one or more, then start.
+                          onClick={() => (mode === 'coach' ? togglePlan(p.id) : startFromPlans([p]))}
+                          className={`flex items-center gap-3 rounded-xl border px-4 py-3.5 text-left transition-colors ${
+                            picked ? 'border-accent-600 bg-accent-50' : 'border-line-strong hover:border-accent-600 hover:bg-accent-50'
+                          }`}
+                        >
+                          <ClipboardList className="size-5 shrink-0 text-accent-700" />
+                          <div className="min-w-0 flex-1">
+                            <p className="flex items-center gap-1.5 text-[15px] font-medium text-ink-900">
+                              <span className="truncate">{p.name}</span>
+                              {p.id === activePlan?.id && mode === 'coach' && <Badge tone="accent">已指派</Badge>}
+                            </p>
+                            <p className="truncate text-xs text-ink-500">
+                              {menu.exercises.length} 個動作・{menu.exercises.map((r) => exMap.get(r.exerciseId)?.name).slice(0, 3).join('、')}
+                            </p>
+                          </div>
+                          {mode === 'coach' && (
+                            <span
+                              aria-hidden
+                              className={`inline-flex size-6 shrink-0 items-center justify-center rounded-full border-2 ${picked ? 'border-accent-600 bg-accent-600 text-white' : 'border-ink-300'}`}
+                            >
+                              {picked && <Check className="size-3.5" strokeWidth={3} />}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
                   </div>
+                  {mode === 'coach' && (
+                    <>
+                      {startablePlans.length > PLAN_CARDS && (
+                        <select
+                          aria-label="加入其他計畫"
+                          className={`${inputClass} mt-2 h-11 sm:max-w-xs`}
+                          value=""
+                          onChange={(e) => e.target.value && togglePlan(e.target.value)}
+                        >
+                          <option value="">加入其他計畫（{startablePlans.length - PLAN_CARDS}）…</option>
+                          {startablePlans.slice(PLAN_CARDS).map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {selectedPlanIds.includes(p.id) ? '✓ ' : ''}
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <Button className="h-12 sm:h-11" disabled={!selectedPlans.length} onClick={() => startFromPlans(selectedPlans)}>
+                          {selectedPlans.length > 1 ? `合併 ${selectedPlans.length} 個計畫開始` : selectedPlans.length ? `開始「${selectedPlans[0].name}」` : '請先選擇計畫'}
+                        </Button>
+                        {selectedPlans.length > 1 && (
+                          <p className="text-xs text-ink-500">
+                            {selectedPlans.map((p) => p.name).join(' + ')}・共 {new Set(selectedPlans.flatMap((p) => planMenu(p).exercises.map((r) => r.exerciseId))).size} 個動作
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
                 <p className="rounded-lg bg-canvas px-3 py-2.5 text-[13px] text-ink-500">
-                  {mode === 'coach' ? '此學員尚未指派計畫，可從空白開始或到「訓練計畫」指派。' : isSelf ? '從上次訓練或空白開始記錄。' : '教練尚未指派計畫給你，可以從空白開始記錄。'}
+                  {mode === 'coach' ? '還沒有訓練計畫，可以從空白開始，或到「訓練計畫」建立常用的菜單。' : isSelf ? '從上次訓練或空白開始記錄。' : '教練尚未指派計畫給你，可以從空白開始記錄。'}
                 </p>
               )}
-
-              {mode === 'coach' && <OtherPlanPicker excludeId={activePlan?.id} onStart={startFromDay} />}
 
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {lastWorkout && (
@@ -393,7 +489,7 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
                 <Clock className="size-3.5" />
                 {formatTime(workout.startedAt)} 開始・{elapsed ?? 0} 分鐘
               </span>
-              {plan && <span>{plan.name}</span>}
+              {planNames && <span>{planNames}</span>}
               {mode === 'coach' && balance && (
                 <span className={balance.remaining <= LOW_BALANCE_THRESHOLD ? 'text-warn-600' : ''}>剩餘 {balance.remaining} 堂</span>
               )}
@@ -461,7 +557,6 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
       <Card className="p-4 md:p-5">
         <TextArea
           label="訓練備註"
-          placeholder={mode === 'coach' ? '例如：深蹲深度改善，下次主項加 2.5 kg' : '今天的狀態、感受…'}
           value={workout.notes}
           maxLength={500}
           onChange={(e) => patch((w) => ({ ...w, notes: e.target.value }))}
@@ -477,7 +572,10 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
       </Card>
 
       {/* Sticky action bar — always reachable with one thumb */}
-      <div className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-20 md:bottom-4">
+      {/* Phones: the bar is fixed just above the tab bar (sticky moved with the page and iOS overscroll);
+          the spacer keeps the last content clear of it. Desktop: sticky at the bottom of the column. */}
+      <div aria-hidden className="h-20 md:hidden" />
+      <div className="fixed inset-x-0 bottom-[calc(50px+env(safe-area-inset-bottom))] z-30 px-4 pb-2 md:sticky md:inset-x-auto md:bottom-4 md:z-20 md:px-0 md:pb-0">
         <div className="flex items-center gap-2 material rounded-2xl ring-1 ring-black/5 p-2 shadow-xl shadow-black/10">
           <div className="hidden min-w-0 flex-1 px-2 sm:block">
             <p className="tabular text-sm font-medium text-ink-900">
@@ -560,37 +658,5 @@ export function WorkoutLogger({ mode, fixedStudentId }: { mode: 'coach' | 'stude
         }}
       />
     </div>
-  )
-}
-
-function OtherPlanPicker({ excludeId, onStart }: { excludeId?: ID; onStart: (p: TrainingPlan, d: TrainingDay) => void }) {
-  const { data } = useData()
-  const [planId, setPlanId] = useState('')
-  const plans = data.plans.filter((p) => p.id !== excludeId)
-  const plan = plans.find((p) => p.id === planId)
-  if (!plans.length) return null
-  return (
-    <details className="group rounded-xl border border-line px-4 py-3 open:pb-4">
-      <summary className="cursor-pointer list-none text-[13px] font-medium text-ink-600 select-none group-open:mb-3">
-        使用其他計畫…
-      </summary>
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <select aria-label="選擇計畫" className={`${inputClass} h-11 sm:max-w-xs`} value={planId} onChange={(e) => setPlanId(e.target.value)}>
-          <option value="">選擇計畫</option>
-          {plans.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        <div className="flex flex-wrap gap-2">
-          {plan?.days.map((d) => (
-            <Button key={d.id} variant="secondary" className="h-11" onClick={() => onStart(plan, d)}>
-              {d.name}
-            </Button>
-          ))}
-        </div>
-      </div>
-    </details>
   )
 }
